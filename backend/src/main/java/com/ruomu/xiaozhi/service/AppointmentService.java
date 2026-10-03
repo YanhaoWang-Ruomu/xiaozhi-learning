@@ -1,5 +1,7 @@
 package com.ruomu.xiaozhi.service;
 
+import com.mongodb.ErrorCategory;
+import com.mongodb.MongoWriteException;
 import com.mongodb.client.MongoCollection;
 import com.ruomu.xiaozhi.dto.AppointmentResponse;
 import com.ruomu.xiaozhi.dto.CreateAppointmentRequest;
@@ -9,9 +11,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Objects;
 import java.util.UUID;
 
 import static com.mongodb.client.model.Filters.eq;
@@ -27,17 +31,33 @@ public class AppointmentService {
     private final MongoCollection<Document> collection;
 
     public AppointmentService(MongoTemplate mongoTemplate) {
-        this.collection =
-                mongoTemplate.getCollection("demo_appointments");
+        this.collection = mongoTemplate.getCollection("demo_appointments");
     }
 
     public AppointmentResponse create(
-            CreateAppointmentRequest request) {
+            CreateAppointmentRequest request,
+            String idempotencyKey) {
 
         if (request == null) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "请求内容不能为空"
+            );
+        }
+
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Idempotency-Key 不能为空"
+            );
+        }
+
+        String requestId = idempotencyKey.strip();
+
+        if (requestId.length() > 128) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Idempotency-Key 不能超过128个字符"
             );
         }
 
@@ -48,6 +68,29 @@ public class AppointmentService {
         String department = request.department() == null
                 ? ""
                 : request.department().strip();
+
+        LocalDate visitDate = request.visitDate();
+
+        // 同一个请求标识，始终生成相同的演示预约编号。
+        String appointmentId = "DEMO-" + UUID.nameUUIDFromBytes(
+                ("demo-appointment:" + requestId)
+                        .getBytes(StandardCharsets.UTF_8)
+        );
+
+        Document existing = collection
+                .find(eq("_id", appointmentId))
+                .first();
+
+        // 优先检查旧记录，确保跨天重试也能返回原结果。
+        if (existing != null) {
+            return reuseExisting(
+                    existing,
+                    requestId,
+                    hospitalId,
+                    department,
+                    visitDate
+            );
+        }
 
         if (!"DEMO001".equals(hospitalId)) {
             throw new ResponseStatusException(
@@ -63,7 +106,6 @@ public class AppointmentService {
             );
         }
 
-        LocalDate visitDate = request.visitDate();
         LocalDate today = LocalDate.now(ZONE);
 
         if (visitDate == null
@@ -76,9 +118,8 @@ public class AppointmentService {
             );
         }
 
-        String appointmentId = "DEMO-" + UUID.randomUUID();
-
         Document document = new Document("_id", appointmentId)
+                .append("requestId", requestId)
                 .append("status", "DEMO_CREATED")
                 .append("hospitalId", hospitalId)
                 .append("department", department)
@@ -86,12 +127,38 @@ public class AppointmentService {
                 .append("timeZone", ZONE.getId())
                 .append("createdAt", Instant.now().toString());
 
-        collection.insertOne(document);
+        try {
+            collection.insertOne(document);
+        } catch (MongoWriteException exception) {
+
+            if (exception.getError().getCategory()
+                    != ErrorCategory.DUPLICATE_KEY) {
+                throw exception;
+            }
+
+            // 两个相同请求同时到达时，只允许一个请求插入成功。
+            Document saved = collection
+                    .find(eq("_id", appointmentId))
+                    .first();
+
+            if (saved == null) {
+                throw exception;
+            }
+
+            return reuseExisting(
+                    saved,
+                    requestId,
+                    hospitalId,
+                    department,
+                    visitDate
+            );
+        }
 
         return toResponse(document);
     }
 
     public AppointmentResponse findById(String appointmentId) {
+
         Document document = collection
                 .find(eq("_id", appointmentId))
                 .first();
@@ -106,7 +173,38 @@ public class AppointmentService {
         return toResponse(document);
     }
 
+    private AppointmentResponse reuseExisting(
+            Document document,
+            String requestId,
+            String hospitalId,
+            String department,
+            LocalDate visitDate) {
+
+        String dateText = visitDate == null
+                ? null
+                : visitDate.toString();
+
+        boolean sameRequest =
+                Objects.equals(document.getString("requestId"), requestId)
+                        && Objects.equals(
+                        document.getString("hospitalId"), hospitalId)
+                        && Objects.equals(
+                        document.getString("department"), department)
+                        && Objects.equals(
+                        document.getString("visitDate"), dateText);
+
+        if (!sameRequest) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "同一个 Idempotency-Key 不能用于不同的预约内容"
+            );
+        }
+
+        return toResponse(document);
+    }
+
     private AppointmentResponse toResponse(Document document) {
+
         return new AppointmentResponse(
                 document.getString("_id"),
                 document.getString("status"),
