@@ -1,6 +1,9 @@
 package com.ruomu.xiaozhi.config;
 
+import com.ruomu.xiaozhi.service.ChatAssistant;
 import dev.langchain4j.community.model.dashscope.QwenChatModel;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.service.AiServices;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -21,6 +24,19 @@ public class AiConfig {
                 .apiKey(apiKey)
                 .modelName("qwen-plus")
                 .maxTokens(256)
+                .build();
+    }
+
+    @Bean
+    public ChatAssistant chatAssistant(QwenChatModel model) {
+        return AiServices.builder(ChatAssistant.class)
+                .chatLanguageModel(model)
+                .chatMemoryProvider(conversationId ->
+                        MessageWindowChatMemory.builder()
+                                .id(conversationId)
+                                .maxMessages(20)
+                                .build()
+                )
                 .build();
     }
 }

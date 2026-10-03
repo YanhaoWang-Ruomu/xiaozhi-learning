@@ -76,3 +76,11 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - 实现 GET /api/chat，通过 message 参数接收用户问题。
 - 浏览器验证默认问候和自定义问题均能返回模型回复。
 - 当前每次请求独立，尚未加入会话记忆。
+
+### 2026-10-03：实现内存会话记忆
+
+- 增加 langchain4j 依赖，通过 AiServices 创建 ChatAssistant。
+- 使用 @MemoryId 和 conversationId 区分会话。
+- 使用 MessageWindowChatMemory，每个会话最多保留 20 条消息。
+- 验证 demo1 能记住测试名字，demo2 不知道该名字。
+- 当前记录保存在程序内存中，重启后清空，尚未接入 MongoDB。
