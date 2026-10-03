@@ -1,6 +1,7 @@
 package com.ruomu.xiaozhi.config;
 
 import com.ruomu.xiaozhi.service.ChatAssistant;
+import com.ruomu.xiaozhi.store.MongoChatMemoryStore;
 import dev.langchain4j.community.model.dashscope.QwenChatModel;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.service.AiServices;
@@ -28,13 +29,17 @@ public class AiConfig {
     }
 
     @Bean
-    public ChatAssistant chatAssistant(QwenChatModel model) {
+    public ChatAssistant chatAssistant(
+            QwenChatModel model,
+            MongoChatMemoryStore memoryStore) {
+
         return AiServices.builder(ChatAssistant.class)
                 .chatLanguageModel(model)
                 .chatMemoryProvider(conversationId ->
                         MessageWindowChatMemory.builder()
                                 .id(conversationId)
                                 .maxMessages(20)
+                                .chatMemoryStore(memoryStore)
                                 .build()
                 )
                 .build();

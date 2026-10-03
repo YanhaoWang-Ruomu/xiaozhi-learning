@@ -84,3 +84,13 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - 使用 MessageWindowChatMemory，每个会话最多保留 20 条消息。
 - 验证 demo1 能记住测试名字，demo2 不知道该名字。
 - 当前记录保存在程序内存中，重启后清空，尚未接入 MongoDB。
+
+### 2026-10-03：实现 MongoDB 会话记忆持久化
+
+- 添加 Spring Boot MongoDB 依赖和数据库连接配置。
+- 实现 MongoChatMemoryStore，支持读取、更新和删除会话记忆。
+- 使用 xiaozhi_learning 数据库和 chat_memory 集合。
+- 验证 Java 后端重启后，原会话仍能读取测试暗号。
+- 验证新会话不能读取其他会话的暗号。
+- 当前持久化最多 20 条消息的记忆窗口，不是完整聊天历史。
+- 本机数据目录：F:\xiaozhi-learning-data\mongodb。
