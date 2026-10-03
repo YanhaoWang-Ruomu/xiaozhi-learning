@@ -1,0 +1,47 @@
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+
+# Frontend
+node_modules/
+dist/
+coverage/
+
+# IDE and operating system
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+!.env.sample
+config.local.json
+application-local.properties
+application-local.yml
+application-local.yaml
+*.pem
+*.key
+credentials.json
+
+# Local runtimes, databases, output and logs
+/tools/
+/downloads/
+/data/
+/logs/
+*.log
+
+# Course videos, installers and archives
+*.mp4
+*.mkv
+*.avi
+*.msi
+*.exe
+*.zip
+*.7z
+*.rar
