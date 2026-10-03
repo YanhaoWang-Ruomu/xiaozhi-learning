@@ -24,7 +24,7 @@ public class AiConfig {
         return QwenChatModel.builder()
                 .apiKey(apiKey)
                 .modelName("qwen-plus")
-                .maxTokens(256)
+                .maxTokens(512)
                 .build();
     }
 
