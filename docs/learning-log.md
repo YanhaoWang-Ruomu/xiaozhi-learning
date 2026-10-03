@@ -125,3 +125,14 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - 修正模型自行判断 UNKNOWN 格式无效的问题：明确任意非空编号均可查询。
 - 当前仅支持查询本地规则，尚不支持实际预约或实时号源查询。
 - 少量测试通过不代表模型始终遵守规则；演示回答仍出现过遗漏时区的情况。
+
+### 2026-10-04：实现演示预约创建与查询
+
+- 新增请求和响应 record、AppointmentService、AppointmentController。
+- 实现 POST /api/appointments 和 GET /api/appointments/{appointmentId}。
+- 校验演示医院、科室和预约日期，保存成功后返回程序生成的编号。
+- 使用 MongoDB 的 demo_appointments 集合保存记录。
+- 验证创建、按编号查询及 Java 后端重启后读取。
+- 验证过去日期返回 400，不存在的预约编号返回 404。
+- 显式声明 JSON 响应使用 UTF-8，修复 PowerShell 中文乱码。
+- 当前仅保存演示记录，尚无防重复提交、用户身份校验和实际号源管理。
