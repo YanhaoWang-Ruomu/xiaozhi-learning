@@ -54,3 +54,17 @@
 我的理解：
 pom.xml 声明项目需要的依赖，修改后需要让 Maven 同步。
 启动类负责启动应用，Controller 负责接收请求并返回结果。
+
+## 2026-10-03：完成第一次模型调用
+
+- 添加 LangChain4j DashScope 1.0.0-beta3 依赖。
+- 创建 QwenHello，从 DASHSCOPE_API_KEY 环境变量读取密钥。
+- 调用 qwen-plus，成功收到回复，程序正常退出。
+
+遇到的问题：
+调用曾返回 401 Invalid API-key provided。
+重新创建并配置完整的百炼 API Key，重启 IDEA 后调用成功。
+
+我的理解：
+build() 创建模型客户端，chat() 才真正发送请求。
+密钥保存在本机环境变量中，代码只保存环境变量名称。

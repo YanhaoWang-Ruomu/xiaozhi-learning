@@ -22,9 +22,17 @@
     </properties>
 
     <dependencies>
+        <!-- Web 后端：启动服务器、处理 HTTP 请求 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- 大模型：通过 LangChain4j 调用通义千问 -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-community-dashscope</artifactId>
+            <version>1.0.0-beta3</version>
         </dependency>
     </dependencies>
 
