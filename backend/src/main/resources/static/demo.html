@@ -101,8 +101,9 @@
         #draftChoices {
             display: grid;
             gap: 9px;
-            max-height: 240px;
+            max-height: 260px;
             overflow-y: auto;
+            margin-top: 16px;
         }
         .draft-choice {
             text-align: left;
@@ -138,7 +139,18 @@
             line-height: 1.7;
         }
         #confirmButton { width: 100%; }
-        #draftForm { margin-top: 24px; padding-top: 22px; border-top: 1px solid #eef2f7; }
+        #draftForm {
+            margin-top: 24px;
+            padding-top: 22px;
+            border-top: 1px solid #eef2f7;
+        }
+        details {
+            margin-top: 18px;
+            border-top: 1px solid #eef2f7;
+            padding-top: 14px;
+        }
+        summary { cursor: pointer; color: #6c809b; }
+        details label { margin-top: 14px; }
         @media (max-width: 850px) {
             .layout { grid-template-columns: 1fr; }
             main { padding: 0 14px 30px; }
@@ -158,7 +170,9 @@
         <section class="card">
             <div class="card-heading">
                 <h2>与小智交流</h2>
-                <button id="newChatButton" class="secondary" type="button">新会话</button>
+                <button id="newChatButton" class="secondary" type="button">
+                    新会话
+                </button>
             </div>
 
             <div id="messages" aria-live="polite"></div>
@@ -178,17 +192,37 @@
             <p id="status" role="status"></p>
             <p id="storageNotice" class="small muted"></p>
             <p id="operationNotice" class="small" role="status"></p>
+
+            <details>
+                <summary>会话信息（排查用）</summary>
+                <label for="conversationIdView">当前会话编号</label>
+                <input id="conversationIdView" readonly>
+                <p class="small muted">
+                    点击“新会话”会更换编号。此编号用于关联会话，并非登录凭证。
+                </p>
+            </details>
         </section>
 
         <section class="card">
             <div class="card-heading">
                 <h2>草稿列表</h2>
-                <span class="muted">共 <span id="draftCount">0</span> 份</span>
+                <span class="muted">
+                    共 <span id="draftCount">0</span> 份
+                </span>
             </div>
 
             <p class="muted">
-                刷新本标签页可恢复列表，并重新查询草稿状态。
-                点击“新会话”会清空本页暂存，数据库记录仍保留。
+                刷新时自动查询当前会话最近的 100 份草稿。
+                手动加载的草稿也会保留在本页列表中。
+            </p>
+
+            <button id="syncButton" class="secondary" type="button">
+                同步当前会话草稿
+            </button>
+
+            <p class="small muted">
+                如果聊天中途刷新，可稍后点击同步找回已生成的草稿。
+                同步只查询，不会生成或确认预约。
             </p>
 
             <div id="draftChoices"></div>
@@ -198,11 +232,15 @@
             <div id="draftDetails"></div>
 
             <div id="confirmationNotice" class="notice"></div>
-            <button id="confirmButton" type="button" disabled>确认创建演示预约</button>
+            <button id="confirmButton" type="button" disabled>
+                确认创建演示预约
+            </button>
 
             <form id="draftForm">
                 <label for="draftIdInput">手动加载已有草稿</label>
-                <input id="draftIdInput" placeholder="DRAFT-..." autocomplete="off">
+                <input id="draftIdInput"
+                       placeholder="DRAFT-..."
+                       autocomplete="off">
                 <div class="actions">
                     <button id="loadButton" class="secondary" type="submit">
                         加载 / 刷新草稿
@@ -227,6 +265,8 @@
     let pendingOperation = "";
 
     function saveSession() {
+        $("conversationIdView").value = conversationId;
+
         try {
             sessionStorage.setItem(storageKey, JSON.stringify({
                 version: 1,
@@ -236,6 +276,7 @@
                 history: history.slice(-100),
                 pendingOperation
             }));
+
             $("storageNotice").textContent =
                 "本标签页会暂存最近 100 条消息和草稿编号。";
         } catch (error) {
@@ -247,7 +288,7 @@
     function showOperationNotice() {
         $("operationNotice").textContent = pendingOperation
             ? "有一次" + pendingOperation +
-            "尚未核实结果。后端可能已处理，请先核对；页面不会自动重发。"
+            "的完整结果尚未收到。请同步草稿核对；同步不会补回聊天回复，也不会重发原请求。"
             : "";
     }
 
@@ -257,14 +298,20 @@
     }
 
     function updateControls() {
-        for (const id of ["sendButton", "newChatButton", "exampleButton", "loadButton"]) {
+        for (const id of [
+            "sendButton", "newChatButton", "exampleButton",
+            "loadButton", "syncButton"
+        ]) {
             $(id).disabled = busy;
         }
+
         for (const button of $("draftChoices").querySelectorAll("button")) {
             button.disabled = busy;
         }
+
         $("messageInput").disabled = busy;
         $("draftIdInput").disabled = busy;
+
         $("confirmButton").disabled = busy || !currentDraft ||
             currentDraft.status !== "PENDING_CONFIRMATION" ||
             currentDraft.appointmentId != null;
@@ -314,18 +361,26 @@
             const button = document.createElement("button");
             button.type = "button";
             button.className = "draft-choice";
-            button.classList.toggle("selected", draft.draftId === selectedDraftId);
-            button.setAttribute("aria-pressed", String(draft.draftId === selectedDraftId));
+            button.classList.toggle(
+                "selected", draft.draftId === selectedDraftId
+            );
+            button.setAttribute(
+                "aria-pressed", String(draft.draftId === selectedDraftId)
+            );
 
             const state = draft.status === "CONFIRMED" ? "已确认"
-                : draft.status === "PENDING_CONFIRMATION" ? "待确认" : "状态未核实";
+                : draft.status === "PENDING_CONFIRMATION"
+                    ? "待确认" : "状态未核实";
 
             button.textContent =
                 (draft.visitDate || "日期待查询") + " · " +
                 (draft.department || "科室待查询") + " · " + state +
                 "\n" + draft.draftId;
 
-            button.addEventListener("click", () => selectDraft(draft.draftId));
+            button.addEventListener(
+                "click", () => selectDraft(draft.draftId)
+            );
+
             $("draftChoices").append(button);
         }
 
@@ -337,7 +392,8 @@
         $("draftDetails").replaceChildren();
         $("draftHint").textContent = hint;
         $("confirmButton").textContent = "确认创建演示预约";
-        $("confirmationNotice").textContent = "请先加载并核对草稿详情，再确认。";
+        $("confirmationNotice").textContent =
+            "请先加载并核对草稿详情，再确认。";
         updateControls();
     }
 
@@ -366,6 +422,7 @@
         $("draftDetails").replaceChildren();
 
         const confirmed = draft.status === "CONFIRMED";
+
         $("draftHint").textContent = confirmed
             ? "当前草稿已确认。"
             : "请核对当前草稿，再决定是否确认。";
@@ -393,9 +450,11 @@
 
     async function request(url, options = {}) {
         const response = await fetch(url, {...options, cache: "no-store"});
+
         if (!response.ok) {
             throw new Error("请求失败，HTTP 状态码：" + response.status);
         }
+
         return response.json();
     }
 
@@ -425,6 +484,7 @@
         setBusy(true);
 
         if (drafts.has(draftId)) selectedDraftId = draftId;
+
         renderChoices();
         saveSession();
         showUnavailable("正在从后端读取草稿……");
@@ -434,7 +494,17 @@
             await refreshDraft(draftId);
             setStatus("草稿已刷新。");
         } catch (error) {
-            showUnavailable("查询失败，草稿列表已保留，请重新选择后再确认。");
+            if (drafts.has(draftId)) {
+                drafts.set(draftId, {
+                    ...drafts.get(draftId),
+                    status: "UNVERIFIED"
+                });
+                renderChoices();
+            }
+
+            showUnavailable(
+                "查询失败，草稿列表已保留，请重新选择后再确认。"
+            );
             setStatus(error.message, true);
         } finally {
             saveSession();
@@ -451,7 +521,8 @@
             day: "2-digit"
         }).formatToParts(new Date());
 
-        const value = type => parts.find(part => part.type === type).value;
+        const value = type =>
+            parts.find(part => part.type === type).value;
 
         return new Date(Date.UTC(
             Number(value("year")),
@@ -464,6 +535,7 @@
         $("messageInput").value =
             "我选择 DEMO001 的内科，预约日期是 " +
             tomorrowInShanghai() + "。请帮我生成一份演示预约草稿。";
+
         $("messageInput").focus();
         setStatus("已填入示例，请核对日期后发送。");
     });
@@ -489,7 +561,8 @@
                 body: JSON.stringify({conversationId, message})
             });
 
-            if (typeof data.reply !== "string" || !Array.isArray(data.drafts)) {
+            if (typeof data.reply !== "string" ||
+                !Array.isArray(data.drafts)) {
                 throw new Error("聊天接口返回格式异常。");
             }
 
@@ -497,10 +570,15 @@
             data.drafts.forEach(validateDraft);
 
             const newDrafts = [
-                ...new Map(data.drafts.map(draft => [draft.draftId, draft])).values()
+                ...new Map(
+                    data.drafts.map(draft => [draft.draftId, draft])
+                ).values()
             ];
 
-            newDrafts.forEach(draft => drafts.set(draft.draftId, draft));
+            newDrafts.forEach(draft =>
+                drafts.set(draft.draftId, draft)
+            );
+
             renderChoices();
             saveSession();
 
@@ -508,7 +586,9 @@
                 displayDraft(newDrafts[0]);
             } else if (newDrafts.length > 1) {
                 selectedDraftId = null;
-                showUnavailable("本轮生成了多份草稿，请从列表中选择一份。");
+                showUnavailable(
+                    "本轮生成了多份草稿，请从列表中选择一份。"
+                );
                 renderChoices();
             } else if (selectedDraftId) {
                 await refreshDraft(selectedDraftId);
@@ -519,11 +599,14 @@
             }
 
             pendingOperation = "";
+
             setStatus(newDrafts.length
                 ? "回复完成，草稿已加入列表。"
                 : "回复完成，已有草稿已保留。");
         } catch (error) {
-            showUnavailable("本轮结果未完整取得。已有列表保留，请重新选择草稿核实状态。");
+            showUnavailable(
+                "本轮结果未完整取得，请点击“同步当前会话草稿”核实。"
+            );
             setStatus(error.message + "。请求不会自动重发。", true);
         } finally {
             saveSession();
@@ -555,7 +638,8 @@
                 {method: "POST"}
             );
 
-            if (appointment.status !== "DEMO_CREATED" || !appointment.appointmentId) {
+            if (appointment.status !== "DEMO_CREATED" ||
+                !appointment.appointmentId) {
                 throw new Error("确认接口返回内容异常。");
             }
 
@@ -569,8 +653,13 @@
             pendingOperation = "";
             setStatus("演示预约已创建，列表状态已更新。");
         } catch (error) {
-            showUnavailable("确认结果尚未核实，请点击列表中的同一份草稿重新查询。");
-            setStatus(error.message + "。请勿另建草稿来重试此次确认。", true);
+            showUnavailable(
+                "确认结果尚未核实，请点击列表中的同一份草稿重新查询。"
+            );
+            setStatus(
+                error.message + "。请勿另建草稿来重试此次确认。",
+                true
+            );
         } finally {
             saveSession();
             showOperationNotice();
@@ -592,18 +681,130 @@
         $("messageInput").value = "";
         $("draftIdInput").value = "";
 
-        showUnavailable("新会话已开始。旧草稿和预约仍保留在数据库中。");
+        showUnavailable(
+            "新会话已开始。旧草稿和预约仍保留在数据库中。"
+        );
         renderChoices();
         setStatus("");
 
-        addMessage("assistant",
-            "你好，我是小智。可以交流需求，也可以准备演示预约草稿。");
+        addMessage(
+            "assistant",
+            "你好，我是小智。可以交流需求，也可以准备演示预约草稿。"
+        );
+    });
+
+    async function synchronizeDrafts() {
+        const previousIds = new Set(drafts.keys());
+
+        showUnavailable("正在从后端同步草稿……");
+
+        for (const [id, draft] of drafts) {
+            drafts.set(id, {...draft, status: "UNVERIFIED"});
+        }
+
+        renderChoices();
+
+        let listError = "";
+
+        try {
+            const list = await request(
+                "/api/appointments/drafts?conversationId=" +
+                encodeURIComponent(conversationId)
+            );
+
+            if (!Array.isArray(list)) {
+                throw new Error("会话草稿接口应返回数组。");
+            }
+
+            list.forEach(validateDraft);
+
+            // 接口按新到旧返回；Map 的页面显示顺序相反。
+            for (const draft of [...list].reverse()) {
+                drafts.set(draft.draftId, draft);
+            }
+        } catch (error) {
+            listError = error.message;
+        }
+
+        // 单独核实旧版草稿、手动加载项和不在最近 100 份中的已知草稿。
+        const unresolved = [...drafts.values()]
+            .filter(draft => draft.status === "UNVERIFIED")
+            .map(draft => draft.draftId);
+
+        const results = await Promise.allSettled(
+            unresolved.map(fetchDraft)
+        );
+
+        results.forEach((result, index) => {
+            if (result.status === "fulfilled") {
+                drafts.set(unresolved[index], result.value);
+            }
+        });
+
+        const selected = drafts.get(selectedDraftId);
+
+        if (selected && selected.status !== "UNVERIFIED") {
+            displayDraft(selected);
+        } else {
+            showUnavailable(selectedDraftId
+                ? "当前草稿尚未核实，请点击列表重试；核实前不能确认。"
+                : drafts.size
+                    ? "请选择一份草稿，核对详情后再确认。"
+                    : "当前没有已加载的草稿。");
+        }
+
+        renderChoices();
+        saveSession();
+        showOperationNotice();
+
+        const added = [...drafts.keys()]
+            .filter(id => !previousIds.has(id)).length;
+
+        const failed = [...drafts.values()]
+            .filter(draft => draft.status === "UNVERIFIED").length;
+
+        const summary =
+            "本次找回 " + added + " 份，本页共 " +
+            drafts.size + " 份草稿。";
+
+        if (listError) {
+            setStatus(
+                "当前会话列表查询失败：" + listError +
+                "。已有编号已尝试单独核实；" +
+                failed + " 份状态未核实。请稍后重新同步。",
+                true
+            );
+        } else if (failed) {
+            setStatus(
+                summary + "其中 " + failed +
+                " 份旧记录未能核实，请点击重试。",
+                true
+            );
+        } else {
+            setStatus("会话草稿同步完成。" + summary);
+        }
+    }
+
+    $("syncButton").addEventListener("click", async () => {
+        if (busy) return;
+        setBusy(true);
+
+        try {
+            await synchronizeDrafts();
+        } catch (error) {
+            showUnavailable("同步未完成，请稍后重新同步。");
+            setStatus(error.message, true);
+        } finally {
+            setBusy(false);
+        }
     });
 
     async function restoreSession() {
         setBusy(true);
         showUnavailable("正在恢复当前标签页……");
+
         let saved = null;
+        let readError = false;
 
         try {
             const raw = sessionStorage.getItem(storageKey);
@@ -616,7 +817,8 @@
                     !/^[0-9a-f-]{36}$/i.test(value.conversationId) ||
                     !Array.isArray(value.draftIds) ||
                     !value.draftIds.every(id =>
-                        typeof id === "string" && draftIdPattern.test(id)) ||
+                        typeof id === "string" &&
+                        draftIdPattern.test(id)) ||
                     !Array.isArray(value.history) ||
                     !value.history.every(item =>
                         item &&
@@ -628,69 +830,55 @@
                 saved = value;
             }
         } catch (error) {
-            $("storageNotice").textContent =
-                "未能读取旧暂存，已开始新会话。数据库记录仍保留。";
+            readError = true;
         }
 
-        if (!saved) {
-            renderChoices();
-            showUnavailable("生成草稿后，可在列表中切换查看。");
-            addMessage("assistant",
-                "你好，我是小智。可以交流需求，也可以点击“填入演示预约请求”。");
-            setBusy(false);
-            return;
+        if (saved) {
+            conversationId = saved.conversationId;
+            history = saved.history.slice(-100);
+
+            history.forEach(item =>
+                addMessage(item.role, item.text, false)
+            );
+
+            pendingOperation =
+                typeof saved.pendingOperation === "string"
+                    ? saved.pendingOperation : "";
+
+            const ids = [...new Set(saved.draftIds)];
+
+            ids.forEach(draftId =>
+                drafts.set(draftId, {
+                    draftId,
+                    status: "UNVERIFIED"
+                })
+            );
+
+            selectedDraftId = ids.includes(saved.selectedDraftId)
+                ? saved.selectedDraftId : null;
+        } else {
+            addMessage(
+                "assistant",
+                "你好，我是小智。可以交流需求，也可以准备演示预约草稿。"
+            );
         }
 
-        conversationId = saved.conversationId;
-        history = saved.history.slice(-100);
-        history.forEach(item => addMessage(item.role, item.text, false));
-
-        pendingOperation = typeof saved.pendingOperation === "string"
-            ? saved.pendingOperation : "";
+        saveSession();
         showOperationNotice();
 
-        const ids = [...new Set(saved.draftIds)];
-        ids.forEach(draftId =>
-            drafts.set(draftId, {draftId, status: "UNVERIFIED"}));
+        try {
+            await synchronizeDrafts();
+        } catch (error) {
+            showUnavailable("恢复未完成，请点击同步按钮重试。");
+            setStatus(error.message, true);
+        } finally {
+            setBusy(false);
 
-        selectedDraftId = ids.includes(saved.selectedDraftId)
-            ? saved.selectedDraftId : null;
-
-        renderChoices();
-        setStatus("正在向后端核实草稿状态……");
-
-        const results = await Promise.allSettled(ids.map(fetchDraft));
-        let failures = 0;
-
-        results.forEach((result, index) => {
-            if (result.status === "fulfilled") {
-                drafts.set(ids[index], result.value);
-            } else {
-                failures++;
+            if (readError) {
+                $("storageNotice").textContent =
+                    "未能读取旧暂存，当前使用新的会话编号。数据库记录未删除。";
             }
-        });
-
-        const selected = drafts.get(selectedDraftId);
-
-        if (selected && selected.status !== "UNVERIFIED") {
-            displayDraft(selected);
-        } else {
-            showUnavailable(selectedDraftId
-                ? "当前草稿查询失败，请点击列表重试；核实前不能确认。"
-                : drafts.size
-                    ? "请从恢复的列表中选择草稿。"
-                    : "当前还没有草稿。");
         }
-
-        renderChoices();
-        saveSession();
-
-        setStatus(failures
-                ? "会话已恢复，有 " + failures + " 份草稿未能核实，请点击重试。"
-                : "会话已恢复，草稿状态已从后端更新。",
-            failures > 0);
-
-        setBusy(false);
     }
 
     restoreSession();
