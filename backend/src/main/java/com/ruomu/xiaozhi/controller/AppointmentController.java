@@ -11,8 +11,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping(
@@ -35,9 +38,24 @@ public class AppointmentController {
     @PostMapping("/drafts")
     @ResponseStatus(HttpStatus.CREATED)
     public AppointmentDraftResponse createDraft(
-            @RequestBody CreateAppointmentRequest request) {
+            @RequestBody CreateAppointmentRequest request,
+            @RequestParam(
+                    name = "conversationId",
+                    required = false
+            ) String conversationId) {
 
-        return draftService.createDraft(request);
+        if (conversationId == null) {
+            return draftService.createDraft(request);
+        }
+
+        return draftService.createDraft(request, conversationId);
+    }
+
+    @GetMapping("/drafts")
+    public List<AppointmentDraftResponse> findDraftsByConversation(
+            @RequestParam(name = "conversationId") String conversationId) {
+
+        return draftService.findByConversationId(conversationId);
     }
 
     @GetMapping("/drafts/{draftId}")
@@ -48,14 +66,14 @@ public class AppointmentController {
     }
 
     @PostMapping("/drafts/{draftId}/confirm")
-    public AppointmentResponse confirm(
+    public AppointmentResponse confirmDraft(
             @PathVariable("draftId") String draftId) {
 
         return draftService.confirm(draftId);
     }
 
     @GetMapping("/{appointmentId}")
-    public AppointmentResponse findById(
+    public AppointmentResponse findAppointment(
             @PathVariable("appointmentId") String appointmentId) {
 
         return appointmentService.findById(appointmentId);
