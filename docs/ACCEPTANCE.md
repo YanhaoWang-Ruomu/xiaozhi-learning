@@ -133,3 +133,15 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8081/api/appointments/draf
 - 是否已将真实结果补充到 learning-log：
 
 当前已知范围：本地教学演示、虚构医院资料、无登录与用户归属授权、无真实号源管理、无取消已确认预约功能、无断线续传、无完整服务端历史浏览。知识库资料也不能当作真实医院安排。
+
+### 2026-10-05：知识库与草稿同步检查
+
+- 检查版本：816ff43。
+- Pinecone 状态为 CONNECTED，维度为 1024。
+- 当前资料 expectedChunks 和 storedChunks 均为 3，
+  documentsPresent 为 true。
+- 服务台位置问答返回“星桥楼一层、蓝色风车”，
+  页面显示 1 个检索参考片段。
+- 同步前后为同一份待确认草稿，预约编号尚未生成。
+- 同步后共 1 份草稿，没有重复添加。
+- 本轮未验证已确认、已取消草稿的重启恢复。
