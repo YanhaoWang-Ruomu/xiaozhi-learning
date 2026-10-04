@@ -412,6 +412,18 @@
         box.append(panel);
     }
 
+    // 只整理助手正文中成对的加粗标记，保留原始消息用于历史记录。
+    // 代码片段、幂运算等字面量不做转换；资料原文使用原有显示方式。
+    function assistantDisplayText(text) {
+        const parts = String(text ?? "").split(
+            /(```[\s\S]*?(?:```|$)|`[^`\r\n]*(?:`|$))/g
+        );
+        return parts.map((part, index) => index % 2 ? part : part.replace(
+            /(?<![A-Za-z0-9_*\\])\*\*([^\s*](?:[^*\r\n]*?[^\s*])?)\*\*(?![A-Za-z0-9_*])/g,
+            "$1"
+        )).join("");
+    }
+
     function addMessage(role, text, remember = true, sourceData = []) {
         const sources = role === "assistant" ? normalizeSources(sourceData) : [];
         const box = document.createElement("div");
@@ -423,7 +435,7 @@
 
         const body = document.createElement("div");
         body.className = "message-body";
-        body.textContent = text;
+        body.textContent = role === "assistant" ? assistantDisplayText(text) : text;
 
         box.append(label, body);
         appendSources(box, sources);
@@ -689,7 +701,7 @@
                 if (name === "token") {
                     if (typeof data.text !== "string") throw new Error("回复片段格式异常");
                     entry.text += data.text;
-                    view.body.textContent = entry.text;
+                    view.body.textContent = assistantDisplayText(entry.text);
                     view.label.textContent = "小智 · 正在生成";
                     $("messages").scrollTop = $("messages").scrollHeight;
                 } else if (name === "sources") {
@@ -707,7 +719,7 @@
                 entry.text = data.reply;
                 entry.sources = normalizeSources(data.sources);
                 entry.state = "complete";
-                view.body.textContent = entry.text;
+                view.body.textContent = assistantDisplayText(entry.text);
                 view.label.textContent = "小智";
                 referenceBox.replaceChildren();
                 appendSources(referenceBox, entry.sources);
@@ -717,7 +729,7 @@
                 if (entry.state === "complete") return;
                 entry.state = "interrupted";
                 view.label.textContent = "小智 · 回复未完成";
-                view.body.textContent = (entry.text || "未收到回复正文。") +
+                view.body.textContent = assistantDisplayText(entry.text || "未收到回复正文。") +
                     "\n\n【本轮回复未完整取得，请先同步当前会话草稿核实。】";
                 saveSession();
             }
