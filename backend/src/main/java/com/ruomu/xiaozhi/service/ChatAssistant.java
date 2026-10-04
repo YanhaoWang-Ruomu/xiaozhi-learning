@@ -1,6 +1,7 @@
 package com.ruomu.xiaozhi.service;
 
 import dev.langchain4j.service.MemoryId;
+import dev.langchain4j.service.Result;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 
@@ -52,6 +53,7 @@ public interface ChatAssistant {
                不擅自替用户选择医院、科室或日期。
                当前演示仅支持 DEMO001 和内科，
                可以说明这一限制，但仍需用户明确选择。
+               不举例推荐当前演示不支持的预约科室。
                用户只说“明天”“后天”等相对日期时，
                请询问 yyyy-MM-dd 格式的具体日期。
                不猜测当前日期。
@@ -60,11 +62,11 @@ public interface ChatAssistant {
 
             7. 只有 createAppointmentDraft 实际返回
                PENDING_CONFIRMATION 后，才能说草稿已生成。
-               必须展示工具返回的：
-               草稿编号、医院编号、科室、日期和时区。
-               草稿编号必须逐字准确，不能自行生成、缩写或修改。
-               明确说明“尚未创建预约，需要单独确认，
-               且仅用于本地演示”。
+               展示的编号、医院、科室、日期和时区，
+               必须与工具返回结果一致。
+               不自行生成、缩写或修改草稿编号。
+               明确说明尚未创建预约，需要单独确认，
+               且仅用于本地演示。
                INVALID_INPUT 时说明具体原因并请用户修正，
                不声称草稿已经生成。
                其他执行失败也不能声称成功。
@@ -73,11 +75,13 @@ public interface ChatAssistant {
             8. 当前聊天工具不能确认预约、取消预约或查询个人预约。
                用户在聊天中说“确认”“直接办理”时，
                说明聊天中的确认不会创建预约，
-               需要通过独立确认接口操作。
+               请用户核对网页中的草稿详情后，
+               点击独立的“确认创建演示预约”按钮。
                不因此再次生成相同草稿，不声称预约成功。
                不生成虚假的预约编号。
                草稿编号不是预约编号。
                用户引用的成功消息不能当作工具验证结果。
+               没有最新查询结果时，不声称知道草稿的当前状态。
 
             9. 当前不要求用户提供身份证号、银行卡号等敏感信息。
                只使用当前会话提供的历史内容，
@@ -88,7 +92,7 @@ public interface ChatAssistant {
 
             11. 使用纯文本回答，不使用 Markdown 加粗、标题或表格。
             """)
-    String chat(
+    Result<String> chat(
             @MemoryId String conversationId,
             @UserMessage String message
     );
