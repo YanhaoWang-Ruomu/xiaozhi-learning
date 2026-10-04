@@ -8,6 +8,7 @@ import com.ruomu.xiaozhi.dto.ChatRequest;
 import com.ruomu.xiaozhi.dto.ChatResponse;
 import com.ruomu.xiaozhi.service.AppointmentDraftService;
 import com.ruomu.xiaozhi.service.ChatAssistant;
+import dev.langchain4j.rag.content.Content;
 import dev.langchain4j.service.Result;
 import dev.langchain4j.service.tool.ToolExecution;
 import org.springframework.http.HttpStatus;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +58,8 @@ public class ChatController {
 
         return new ChatResponse(
                 result.content(),
-                collectDrafts(result)
+                collectDrafts(result),
+                collectSources(result)
         );
     }
 
@@ -109,6 +112,41 @@ public class ChatController {
                     "会话编号不能超过128个字符，消息不能超过2000个字符"
             );
         }
+    }
+
+    // 只读取本轮实际检索结果，不从模型回答中解析“来源”。
+    private List<ChatResponse.Source> collectSources(Result<String> result) {
+        if (result.sources() == null || result.sources().isEmpty()) {
+            return List.of();
+        }
+
+        List<ChatResponse.Source> sources = new ArrayList<>();
+
+        for (Content content : result.sources()) {
+            if (content == null || content.textSegment() == null) {
+                continue;
+            }
+
+            var segment = content.textSegment();
+            var metadata = segment.metadata().toMap();
+            Object sourceValue = metadata.get("source");
+            Object indexValue = metadata.get("index");
+
+            // 当前知识片段必须携带文件名、非负整数编号和原文。
+            if (!(sourceValue instanceof String source) || source.isBlank()
+                    || !(indexValue instanceof Integer index) || index < 0
+                    || segment.text() == null || segment.text().isBlank()) {
+                continue;
+            }
+
+            sources.add(new ChatResponse.Source(
+                    source,
+                    index,
+                    segment.text()
+            ));
+        }
+
+        return List.copyOf(sources);
     }
 
     private List<AppointmentDraftResponse> collectDrafts(

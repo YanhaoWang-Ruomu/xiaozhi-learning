@@ -66,6 +66,28 @@
             overflow-wrap: anywhere;
             line-height: 1.8;
         }
+        .source-panel { margin-top: 12px; }
+        .source-note { margin: 10px 0; color: #526b8b; }
+        .source-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #fff;
+            border-radius: 8px;
+        }
+        .source-label {
+            font-weight: bold;
+            overflow-wrap: anywhere;
+        }
+        .source-text {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            line-height: 1.7;
+            margin: 8px 0 0;
+        }
+        summary:focus-visible {
+            outline: 3px solid #93b4ff;
+            outline-offset: 2px;
+        }
         label { display: block; margin-bottom: 8px; }
         textarea, input {
             width: 100%;
@@ -258,12 +280,10 @@
 
             <form id="draftForm">
                 <label for="draftIdInput">手动加载已有草稿</label>
-                <input id="draftIdInput"
-                       placeholder="DRAFT-..."
-                       autocomplete="off">
+                <input id="draftIdInput" placeholder="请输入完整的 DRAFT-... 编号">
                 <div class="actions">
                     <button id="loadButton" class="secondary" type="submit">
-                        加载 / 刷新草稿
+                        加载草稿
                     </button>
                 </div>
             </form>
@@ -307,7 +327,7 @@
             }));
 
             $("storageNotice").textContent =
-                "本标签页会暂存最近 100 条消息和草稿编号。";
+                "本标签页会暂存最近 100 条消息、对应参考资料和草稿编号。";
         } catch (error) {
             $("storageNotice").textContent =
                 "浏览器暂存失败；当前页面仍可使用，但刷新后可能无法恢复。";
@@ -371,7 +391,62 @@
         updateControls();
     }
 
-    function addMessage(role, text, remember = true) {
+    // 兼容旧接口和旧暂存；来源异常不会阻断草稿处理。
+    function normalizeSources(value) {
+        if (!Array.isArray(value)) return [];
+
+        return value.filter(item => item &&
+            typeof item.source === "string" && item.source.trim() &&
+            Number.isInteger(item.index) && item.index >= 0 &&
+            typeof item.text === "string" && item.text.trim()
+        ).map(item => ({
+            source: item.source,
+            index: item.index,
+            text: item.text
+        }));
+    }
+
+    function appendSources(box, sources) {
+        if (!sources.length) return;
+
+        const panel = document.createElement("details");
+        panel.className = "source-panel small";
+
+        const heading = document.createElement("summary");
+        heading.textContent =
+            "本轮检索参考资料（" + sources.length + " 个片段）";
+
+        const note = document.createElement("p");
+        note.className = "source-note";
+        note.textContent =
+            "以下是本轮检索到的虚构教学资料，不代表回答中的每句话都有依据。可展开对照原文；不是医院官方信息。";
+
+        panel.append(heading, note);
+
+        for (const source of sources) {
+            const item = document.createElement("div");
+            item.className = "source-item";
+
+            const label = document.createElement("div");
+            label.className = "source-label";
+            label.textContent = source.source + " · 片段 " + source.index;
+
+            const original = document.createElement("p");
+            original.className = "source-text";
+            original.textContent = source.text;
+
+            item.append(label, original);
+            panel.append(item);
+        }
+
+        box.append(panel);
+    }
+
+    function addMessage(role, text, remember = true, sourceData = []) {
+        const sources = role === "assistant"
+            ? normalizeSources(sourceData)
+            : [];
+
         const box = document.createElement("div");
         box.className = "message " + role;
 
@@ -384,11 +459,12 @@
         body.textContent = text;
 
         box.append(label, body);
+        appendSources(box, sources);
         $("messages").append(box);
         $("messages").scrollTop = $("messages").scrollHeight;
 
         if (remember) {
-            history.push({role, text});
+            history.push({role, text, sources});
             history = history.slice(-100);
             saveSession();
         }
@@ -661,7 +737,7 @@
                 throw new Error("聊天接口返回格式异常。");
             }
 
-            addMessage("assistant", data.reply);
+            addMessage("assistant", data.reply, true, data.sources);
             data.drafts.forEach(validateDraft);
 
             const newDrafts = [
@@ -1033,10 +1109,16 @@
 
         if (saved) {
             conversationId = saved.conversationId;
-            history = saved.history.slice(-100);
+            history = saved.history.slice(-100).map(item => ({
+                role: item.role,
+                text: item.text,
+                sources: item.role === "assistant"
+                    ? normalizeSources(item.sources)
+                    : []
+            }));
 
             history.forEach(item =>
-                addMessage(item.role, item.text, false)
+                addMessage(item.role, item.text, false, item.sources)
             );
 
             pendingOperation =

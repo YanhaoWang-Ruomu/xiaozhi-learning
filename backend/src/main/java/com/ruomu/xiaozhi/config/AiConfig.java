@@ -1,6 +1,7 @@
 package com.ruomu.xiaozhi.config;
 
 import com.ruomu.xiaozhi.service.ChatAssistant;
+import com.ruomu.xiaozhi.service.KnowledgeRetrievalAugmentor;
 import com.ruomu.xiaozhi.store.MongoChatMemoryStore;
 import com.ruomu.xiaozhi.tool.AppointmentTools;
 import dev.langchain4j.community.model.dashscope.QwenChatModel;
@@ -33,8 +34,9 @@ public class AiConfig {
     public ChatAssistant chatAssistant(
             QwenChatModel model,
             MongoChatMemoryStore memoryStore,
-            AppointmentTools appointmentTools) {
-
+            AppointmentTools appointmentTools,
+            KnowledgeRetrievalAugmentor knowledgeRetrievalAugmentor
+    ) {
         return AiServices.builder(ChatAssistant.class)
                 .chatLanguageModel(model)
                 .chatMemoryProvider(conversationId ->
@@ -45,6 +47,7 @@ public class AiConfig {
                                 .build()
                 )
                 .tools(appointmentTools)
+                .retrievalAugmentor(knowledgeRetrievalAugmentor)
                 .build();
     }
 }
