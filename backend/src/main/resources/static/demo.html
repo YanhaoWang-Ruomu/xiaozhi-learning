@@ -68,26 +68,10 @@
         }
         .source-panel { margin-top: 12px; }
         .source-note { margin: 10px 0; color: #526b8b; }
-        .source-item {
-            margin: 10px 0;
-            padding: 10px;
-            background: #fff;
-            border-radius: 8px;
-        }
-        .source-label {
-            font-weight: bold;
-            overflow-wrap: anywhere;
-        }
-        .source-text {
-            white-space: pre-wrap;
-            overflow-wrap: anywhere;
-            line-height: 1.7;
-            margin: 8px 0 0;
-        }
-        summary:focus-visible {
-            outline: 3px solid #93b4ff;
-            outline-offset: 2px;
-        }
+        .source-item { margin: 10px 0; padding: 10px; background: #fff; border-radius: 8px; }
+        .source-label { font-weight: bold; overflow-wrap: anywhere; }
+        .source-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; margin: 8px 0 0; }
+        summary:focus-visible { outline: 3px solid #93b4ff; outline-offset: 2px; }
         label { display: block; margin-bottom: 8px; }
         textarea, input {
             width: 100%;
@@ -280,10 +264,12 @@
 
             <form id="draftForm">
                 <label for="draftIdInput">手动加载已有草稿</label>
-                <input id="draftIdInput" placeholder="请输入完整的 DRAFT-... 编号">
+                <input id="draftIdInput"
+                       placeholder="DRAFT-..."
+                       autocomplete="off">
                 <div class="actions">
                     <button id="loadButton" class="secondary" type="submit">
-                        加载草稿
+                        加载 / 刷新草稿
                     </button>
                 </div>
             </form>
@@ -394,59 +380,40 @@
     // 兼容旧接口和旧暂存；来源异常不会阻断草稿处理。
     function normalizeSources(value) {
         if (!Array.isArray(value)) return [];
-
         return value.filter(item => item &&
             typeof item.source === "string" && item.source.trim() &&
             Number.isInteger(item.index) && item.index >= 0 &&
             typeof item.text === "string" && item.text.trim()
-        ).map(item => ({
-            source: item.source,
-            index: item.index,
-            text: item.text
-        }));
+        ).map(item => ({source: item.source, index: item.index, text: item.text}));
     }
 
     function appendSources(box, sources) {
         if (!sources.length) return;
-
         const panel = document.createElement("details");
         panel.className = "source-panel small";
-
         const heading = document.createElement("summary");
-        heading.textContent =
-            "本轮检索参考资料（" + sources.length + " 个片段）";
-
+        heading.textContent = "本轮检索参考资料（" + sources.length + " 个片段）";
         const note = document.createElement("p");
         note.className = "source-note";
-        note.textContent =
-            "以下是本轮检索到的虚构教学资料，不代表回答中的每句话都有依据。可展开对照原文；不是医院官方信息。";
-
+        note.textContent = "以下是本轮检索到的虚构教学资料，不代表回答中的每句话都有依据。可展开对照原文；不是医院官方信息。";
         panel.append(heading, note);
-
         for (const source of sources) {
             const item = document.createElement("div");
             item.className = "source-item";
-
             const label = document.createElement("div");
             label.className = "source-label";
             label.textContent = source.source + " · 片段 " + source.index;
-
             const original = document.createElement("p");
             original.className = "source-text";
             original.textContent = source.text;
-
             item.append(label, original);
             panel.append(item);
         }
-
         box.append(panel);
     }
 
     function addMessage(role, text, remember = true, sourceData = []) {
-        const sources = role === "assistant"
-            ? normalizeSources(sourceData)
-            : [];
-
+        const sources = role === "assistant" ? normalizeSources(sourceData) : [];
         const box = document.createElement("div");
         box.className = "message " + role;
 
@@ -468,6 +435,7 @@
             history = history.slice(-100);
             saveSession();
         }
+        return {box, body, label};
     }
 
     function validateDraft(draft) {
@@ -708,6 +676,130 @@
         setStatus("已填入示例，请核对日期后发送。");
     });
 
+    function beginStreamingMessage() {
+        const view = addMessage("assistant", "正在准备回复……", false);
+        const referenceBox = document.createElement("div");
+        view.box.append(referenceBox);
+        const entry = {role: "assistant", text: "", sources: [], state: "streaming"};
+        history.push(entry);
+        history = history.slice(-100);
+        saveSession();
+        return {
+            event(name, data) {
+                if (name === "token") {
+                    if (typeof data.text !== "string") throw new Error("回复片段格式异常");
+                    entry.text += data.text;
+                    view.body.textContent = entry.text;
+                    view.label.textContent = "小智 · 正在生成";
+                    $("messages").scrollTop = $("messages").scrollHeight;
+                } else if (name === "sources") {
+                    if (!Array.isArray(data.sources)) throw new Error("参考资料格式异常");
+                    entry.sources = normalizeSources(data.sources);
+                    referenceBox.replaceChildren();
+                    appendSources(referenceBox, entry.sources);
+                } else if (name === "status") {
+                    if (typeof data.message === "string") setStatus(data.message);
+                }
+                saveSession();
+            },
+            complete(data) {
+                // 最终正文覆盖增量拼接，避免保留工具调用前的过渡文本。
+                entry.text = data.reply;
+                entry.sources = normalizeSources(data.sources);
+                entry.state = "complete";
+                view.body.textContent = entry.text;
+                view.label.textContent = "小智";
+                referenceBox.replaceChildren();
+                appendSources(referenceBox, entry.sources);
+                saveSession();
+            },
+            interrupted() {
+                if (entry.state === "complete") return;
+                entry.state = "interrupted";
+                view.label.textContent = "小智 · 回复未完成";
+                view.body.textContent = (entry.text || "未收到回复正文。") +
+                    "\n\n【本轮回复未完整取得，请先同步当前会话草稿核实。】";
+                saveSession();
+            }
+        };
+    }
+
+    async function requestChatStream(message, onEvent) {
+        const controller = new AbortController();
+        let timedOut = false;
+        const timer = setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, 200000);
+        let reader;
+        try {
+            const response = await fetch("/api/chat/stream", {
+                method: "POST",
+                headers: {"Content-Type": "application/json", "Accept": "text/event-stream"},
+                body: JSON.stringify({conversationId, message}),
+                cache: "no-store",
+                signal: controller.signal
+            });
+            if (!response.ok) {
+                const hints = {
+                    400: "消息格式不正确，请检查输入",
+                    409: "上一条请求仍在后台处理中，请稍后再试并先核实草稿",
+                    429: "当前处理中的聊天较多，请稍后再试",
+                    503: "聊天服务暂时不可用，请稍后再试"
+                };
+                throw new Error(hints[response.status] || "请求失败，HTTP 状态码：" + response.status);
+            }
+            if (!response.body ||
+                !response.headers.get("Content-Type")?.includes("text/event-stream")) {
+                throw new Error("后端没有返回流式响应，请检查代码并重启后端");
+            }
+            reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = "";
+            let finalData = null;
+            while (!finalData) {
+                const part = await reader.read();
+                buffer += part.done ? decoder.decode() : decoder.decode(part.value, {stream: true});
+                if (buffer.length > 1000000) throw new Error("流式响应格式异常");
+                let boundary;
+                while ((boundary = /\r?\n\r?\n/.exec(buffer)) !== null) {
+                    const frame = buffer.slice(0, boundary.index);
+                    buffer = buffer.slice(boundary.index + boundary[0].length);
+                    let name = "message";
+                    const lines = [];
+                    for (const line of frame.split(/\r?\n/)) {
+                        if (line.startsWith("event:")) name = line.slice(6).trim();
+                        if (line.startsWith("data:")) lines.push(line.slice(5).replace(/^ /, ""));
+                    }
+                    if (!lines.length) continue;
+                    const data = JSON.parse(lines.join("\n"));
+                    if (!data || typeof data !== "object") throw new Error("流式事件格式异常");
+                    if (name === "failed") {
+                        throw new Error(typeof data.message === "string" ? data.message : "本轮回复未完成");
+                    }
+                    if (name === "done") {
+                        if (typeof data.reply !== "string" || !data.reply.trim() ||
+                            !Array.isArray(data.drafts) || !Array.isArray(data.sources)) {
+                            throw new Error("完整回复格式异常");
+                        }
+                        finalData = data;
+                        break;
+                    }
+                    onEvent(name, data);
+                }
+                if (part.done && !finalData) throw new Error("连接已结束，但没有收到完整回复确认");
+            }
+            return finalData;
+        } catch (error) {
+            if (timedOut) throw new Error("等待回复超时，后台处理状态尚未确认");
+            throw error;
+        } finally {
+            clearTimeout(timer);
+            if (reader) await reader.cancel().catch(() => {});
+            controller.abort();
+        }
+    }
+
     $("chatForm").addEventListener("submit", async event => {
         event.preventDefault();
         if (busy) return;
@@ -719,26 +811,18 @@
         $("messageInput").value = "";
 
         setBusy(true);
-        setStatus("小智正在回复，请稍候……");
+        setStatus("正在建立连接，回复将逐步显示……");
+        const live = beginStreamingMessage();
 
-        pendingOperation = "聊天请求";
+        pendingOperation = "流式聊天请求";
         pendingDraftId = null;
         saveSession();
 
         try {
-            const data = await request("/api/chat", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({conversationId, message})
-            });
-
-            if (typeof data.reply !== "string" ||
-                !Array.isArray(data.drafts)) {
-                throw new Error("聊天接口返回格式异常。");
-            }
-
-            addMessage("assistant", data.reply, true, data.sources);
+            const data = await requestChatStream(message,
+                    (name, value) => live.event(name, value));
             data.drafts.forEach(validateDraft);
+            live.complete(data);
 
             const newDrafts = [
                 ...new Map(
@@ -775,6 +859,7 @@
                 ? "回复完成，草稿已加入列表。"
                 : "回复完成，已有草稿已保留。");
         } catch (error) {
+            live.interrupted();
             showUnavailable(
                 "本轮结果未完整取得，请点击“同步当前会话草稿”核实。"
             );
@@ -1112,14 +1197,17 @@
             history = saved.history.slice(-100).map(item => ({
                 role: item.role,
                 text: item.text,
-                sources: item.role === "assistant"
-                    ? normalizeSources(item.sources)
-                    : []
+                sources: item.role === "assistant" ? normalizeSources(item.sources) : [],
+                state: ["streaming", "interrupted"].includes(item.state) ? "interrupted" : "complete"
             }));
 
-            history.forEach(item =>
-                addMessage(item.role, item.text, false, item.sources)
-            );
+            history.forEach(item => {
+                const incomplete = item.role === "assistant" && item.state === "interrupted";
+                const text = incomplete
+                    ? (item.text || "未收到回复正文。") + "\n\n【上次回复未完整取得，请先同步当前会话草稿核实。】"
+                    : item.text;
+                addMessage(item.role, text, false, item.sources);
+            });
 
             pendingOperation =
                 typeof saved.pendingOperation === "string"

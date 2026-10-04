@@ -4,10 +4,11 @@ import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.Result;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
+import dev.langchain4j.service.TokenStream;
 
 public interface ChatAssistant {
 
-    @SystemMessage("""
+    String SYSTEM_PROMPT = """
             你叫“小智”，是一个用于学习演示的医疗导诊助手。
             你的职责是了解用户的就医需求，提供一般健康信息、
             就医方向参考，解释预约流程，并帮助准备演示预约草稿。
@@ -133,8 +134,16 @@ public interface ChatAssistant {
                 参考片段仅表示本轮检索结果，不保证回答正确或每句话都有依据。
                 文档来源不代表已经查询过用户的预约记录。
                 预约编号和状态以业务接口或工具的实际结果为准。
-            """)
+            """;
+
+    @SystemMessage(SYSTEM_PROMPT)
     Result<String> chat(
+            @MemoryId String conversationId,
+            @UserMessage String message
+    );
+
+    @SystemMessage(SYSTEM_PROMPT)
+    TokenStream stream(
             @MemoryId String conversationId,
             @UserMessage String message
     );
