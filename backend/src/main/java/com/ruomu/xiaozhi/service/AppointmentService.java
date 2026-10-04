@@ -38,93 +38,102 @@ public class AppointmentService {
             CreateAppointmentRequest request,
             String idempotencyKey) {
 
-        if (request == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "请求内容不能为空"
-            );
-        }
+        return createAt(request, idempotencyKey, Instant.now());
+    }
 
-        if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Idempotency-Key 不能为空"
-            );
-        }
+    /*
+     * 仅供同包的草稿业务调用。
+     * 时间必须来自数据库中的首次确认记录。
+     */
+    AppointmentResponse createForConfirmedDraft(
+            CreateAppointmentRequest request,
+            String draftId,
+            Instant confirmationStartedAt) {
 
-        String requestId = idempotencyKey.strip();
-
-        if (requestId.length() > 128) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Idempotency-Key 不能超过128个字符"
-            );
-        }
-
-        String hospitalId = request.hospitalId() == null
-                ? ""
-                : request.hospitalId().strip();
-
-        String department = request.department() == null
-                ? ""
-                : request.department().strip();
-
-        LocalDate visitDate = request.visitDate();
-
-        // 同一个请求标识，始终生成相同的演示预约编号。
-        String appointmentId = "DEMO-" + UUID.nameUUIDFromBytes(
-                ("demo-appointment:" + requestId)
-                        .getBytes(StandardCharsets.UTF_8)
+        return createAt(
+                request,
+                "draft:" + draftId,
+                confirmationStartedAt
         );
+    }
 
-        Document existing = collection
-                .find(eq("_id", appointmentId))
-                .first();
+    /*
+     * 兼容旧版本：
+     * 预约已经写入，但草稿状态尚未更新的情况。
+     */
+    AppointmentResponse findExistingForDraft(
+            CreateAppointmentRequest request,
+            String draftId) {
 
-        // 优先检查旧记录，确保跨天重试也能返回原结果。
-        if (existing != null) {
-            return reuseExisting(
-                    existing,
-                    requestId,
-                    hospitalId,
-                    department,
-                    visitDate
-            );
+        String requestId = requireRequestId("draft:" + draftId);
+
+        Document existing = collection.find(
+                eq("_id", appointmentId(requestId))
+        ).first();
+
+        return existing == null
+                ? null
+                : reuseExisting(existing, requestId, request);
+    }
+
+    void validateForConfirmation(
+            CreateAppointmentRequest request,
+            Instant acceptedAt) {
+
+        if (request == null) {
+            throw badRequest("请求内容不能为空");
         }
 
-        if (!"DEMO001".equals(hospitalId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "当前仅支持演示医院 DEMO001"
-            );
+        if (!"DEMO001".equals(normalize(request.hospitalId()))) {
+            throw badRequest("当前仅支持演示医院 DEMO001");
         }
 
-        if (!"内科".equals(department)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "当前演示仅支持内科"
-            );
+        if (!"内科".equals(normalize(request.department()))) {
+            throw badRequest("当前演示仅支持内科");
         }
 
-        LocalDate today = LocalDate.now(ZONE);
+        LocalDate today = acceptedAt.atZone(ZONE).toLocalDate();
+        LocalDate visitDate = request.visitDate();
 
         if (visitDate == null
                 || !visitDate.isAfter(today)
                 || visitDate.isAfter(today.plusDays(3))) {
 
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "日期必须为上海时区的明天至未来第3天"
-            );
+            throw badRequest("日期必须为上海时区的明天至未来第3天");
+        }
+    }
+
+    private AppointmentResponse createAt(
+            CreateAppointmentRequest request,
+            String idempotencyKey,
+            Instant acceptedAt) {
+
+        if (request == null) {
+            throw badRequest("请求内容不能为空");
         }
 
-        Document document = new Document("_id", appointmentId)
+        String requestId = requireRequestId(idempotencyKey);
+        String id = appointmentId(requestId);
+
+        Document existing = collection.find(
+                eq("_id", id)
+        ).first();
+
+        // 已存在的记录优先返回，跨天重试也不会生成新预约。
+        if (existing != null) {
+            return reuseExisting(existing, requestId, request);
+        }
+
+        validateForConfirmation(request, acceptedAt);
+
+        Document document = new Document("_id", id)
                 .append("requestId", requestId)
                 .append("status", "DEMO_CREATED")
-                .append("hospitalId", hospitalId)
-                .append("department", department)
-                .append("visitDate", visitDate.toString())
+                .append("hospitalId", normalize(request.hospitalId()))
+                .append("department", normalize(request.department()))
+                .append("visitDate", request.visitDate().toString())
                 .append("timeZone", ZONE.getId())
+                .append("acceptedAt", acceptedAt.toString())
                 .append("createdAt", Instant.now().toString());
 
         try {
@@ -136,22 +145,15 @@ public class AppointmentService {
                 throw exception;
             }
 
-            // 两个相同请求同时到达时，只允许一个请求插入成功。
-            Document saved = collection
-                    .find(eq("_id", appointmentId))
-                    .first();
+            Document saved = collection.find(
+                    eq("_id", id)
+            ).first();
 
             if (saved == null) {
                 throw exception;
             }
 
-            return reuseExisting(
-                    saved,
-                    requestId,
-                    hospitalId,
-                    department,
-                    visitDate
-            );
+            return reuseExisting(saved, requestId, request);
         }
 
         return toResponse(document);
@@ -159,9 +161,13 @@ public class AppointmentService {
 
     public AppointmentResponse findById(String appointmentId) {
 
-        Document document = collection
-                .find(eq("_id", appointmentId))
-                .first();
+        if (appointmentId == null || appointmentId.isBlank()) {
+            throw badRequest("预约编号不能为空");
+        }
+
+        Document document = collection.find(
+                eq("_id", appointmentId.strip())
+        ).first();
 
         if (document == null) {
             throw new ResponseStatusException(
@@ -176,22 +182,29 @@ public class AppointmentService {
     private AppointmentResponse reuseExisting(
             Document document,
             String requestId,
-            String hospitalId,
-            String department,
-            LocalDate visitDate) {
+            CreateAppointmentRequest request) {
 
-        String dateText = visitDate == null
+        String dateText = request.visitDate() == null
                 ? null
-                : visitDate.toString();
+                : request.visitDate().toString();
 
         boolean sameRequest =
-                Objects.equals(document.getString("requestId"), requestId)
+                Objects.equals(
+                        document.getString("requestId"),
+                        requestId
+                )
                         && Objects.equals(
-                        document.getString("hospitalId"), hospitalId)
+                        document.getString("hospitalId"),
+                        normalize(request.hospitalId())
+                )
                         && Objects.equals(
-                        document.getString("department"), department)
+                        document.getString("department"),
+                        normalize(request.department())
+                )
                         && Objects.equals(
-                        document.getString("visitDate"), dateText);
+                        document.getString("visitDate"),
+                        dateText
+                );
 
         if (!sameRequest) {
             throw new ResponseStatusException(
@@ -201,6 +214,41 @@ public class AppointmentService {
         }
 
         return toResponse(document);
+    }
+
+    private String requireRequestId(String value) {
+
+        if (value == null || value.isBlank()) {
+            throw badRequest("Idempotency-Key 不能为空");
+        }
+
+        String requestId = value.strip();
+
+        if (requestId.length() > 128) {
+            throw badRequest("Idempotency-Key 不能超过128个字符");
+        }
+
+        return requestId;
+    }
+
+    private String appointmentId(String requestId) {
+
+        return "DEMO-" + UUID.nameUUIDFromBytes(
+                ("demo-appointment:" + requestId)
+                        .getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.strip();
+    }
+
+    private ResponseStatusException badRequest(String message) {
+
+        return new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                message
+        );
     }
 
     private AppointmentResponse toResponse(Document document) {

@@ -88,6 +88,13 @@
         }
         button:disabled { opacity: .5; cursor: not-allowed; }
         button.secondary { background: #edf3fb; color: #557aa5; }
+        button.danger { background: #fff0ee; color: #b42318; }
+        button:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible {
+            outline: 3px solid #93b4ff;
+            outline-offset: 2px;
+        }
         .actions {
             display: flex;
             gap: 10px;
@@ -128,7 +135,10 @@
             font-size: 13px;
             margin-bottom: 7px;
         }
-        .detail-value { overflow-wrap: anywhere; line-height: 1.7; }
+        .detail-value {
+            overflow-wrap: anywhere;
+            line-height: 1.7;
+        }
         .notice {
             margin: 20px 0 15px;
             padding: 15px;
@@ -138,7 +148,11 @@
             background: #fff8eb;
             line-height: 1.7;
         }
-        #confirmButton { width: 100%; }
+        .draft-actions {
+            display: grid;
+            gap: 10px;
+        }
+        .draft-actions button { width: 100%; }
         #draftForm {
             margin-top: 24px;
             padding-top: 22px;
@@ -222,7 +236,7 @@
 
             <p class="small muted">
                 如果聊天中途刷新，可稍后点击同步找回已生成的草稿。
-                同步只查询，不会生成或确认预约。
+                同步只查询，不会创建、确认或取消草稿。
             </p>
 
             <div id="draftChoices"></div>
@@ -232,9 +246,15 @@
             <div id="draftDetails"></div>
 
             <div id="confirmationNotice" class="notice"></div>
-            <button id="confirmButton" type="button" disabled>
-                确认创建演示预约
-            </button>
+
+            <div class="draft-actions">
+                <button id="confirmButton" type="button" disabled>
+                    确认创建演示预约
+                </button>
+                <button id="cancelButton" class="danger" type="button" disabled>
+                    取消当前草稿
+                </button>
+            </div>
 
             <form id="draftForm">
                 <label for="draftIdInput">手动加载已有草稿</label>
@@ -263,6 +283,14 @@
     let busy = false;
     let history = [];
     let pendingOperation = "";
+    let pendingDraftId = null;
+
+    const draftStates = {
+        PENDING_CONFIRMATION: "待确认",
+        CONFIRMING: "确认处理中",
+        CONFIRMED: "已确认",
+        CANCELLED: "已取消"
+    };
 
     function saveSession() {
         $("conversationIdView").value = conversationId;
@@ -274,7 +302,8 @@
                 draftIds: [...drafts.keys()],
                 selectedDraftId,
                 history: history.slice(-100),
-                pendingOperation
+                pendingOperation,
+                pendingDraftId
             }));
 
             $("storageNotice").textContent =
@@ -287,9 +316,31 @@
 
     function showOperationNotice() {
         $("operationNotice").textContent = pendingOperation
-            ? "有一次" + pendingOperation +
-            "的完整结果尚未收到。请同步草稿核对；同步不会补回聊天回复，也不会重发原请求。"
+            ? "有一次" + pendingOperation + "的完整结果尚未核实。" +
+            (pendingDraftId ? "对应草稿：" + pendingDraftId + "。" : "") +
+            "请同步或加载草稿核对。查询不会补回聊天回复，也不会重发原请求。"
             : "";
+    }
+
+    function resolvePendingOperation(draft) {
+        if (draft.draftId === pendingDraftId &&
+            ["CONFIRMED", "CANCELLED"].includes(draft.status)) {
+            pendingOperation = "";
+            pendingDraftId = null;
+            showOperationNotice();
+        }
+    }
+
+    function canConfirm(draft) {
+        return !!draft &&
+            ["PENDING_CONFIRMATION", "CONFIRMING"].includes(draft.status) &&
+            draft.appointmentId == null;
+    }
+
+    function canCancel(draft) {
+        return !!draft &&
+            draft.status === "PENDING_CONFIRMATION" &&
+            draft.appointmentId == null;
     }
 
     function setStatus(text, error = false) {
@@ -311,10 +362,8 @@
 
         $("messageInput").disabled = busy;
         $("draftIdInput").disabled = busy;
-
-        $("confirmButton").disabled = busy || !currentDraft ||
-            currentDraft.status !== "PENDING_CONFIRMATION" ||
-            currentDraft.appointmentId != null;
+        $("confirmButton").disabled = busy || !canConfirm(currentDraft);
+        $("cancelButton").disabled = busy || !canCancel(currentDraft);
     }
 
     function setBusy(value) {
@@ -346,10 +395,20 @@
     }
 
     function validateDraft(draft) {
-        if (!draft || typeof draft.draftId !== "string" ||
+        if (!draft ||
+            typeof draft.draftId !== "string" ||
             !draftIdPattern.test(draft.draftId) ||
-            !["PENDING_CONFIRMATION", "CONFIRMED"].includes(draft.status)) {
+            !Object.hasOwn(draftStates, draft.status)) {
             throw new Error("草稿数据格式异常。");
+        }
+
+        if (draft.status === "CONFIRMED") {
+            if (typeof draft.appointmentId !== "string" ||
+                !draft.appointmentId.trim()) {
+                throw new Error("已确认草稿缺少预约编号。");
+            }
+        } else if (draft.appointmentId != null) {
+            throw new Error("草稿状态与预约编号不一致，请重新查询。");
         }
     }
 
@@ -361,16 +420,18 @@
             const button = document.createElement("button");
             button.type = "button";
             button.className = "draft-choice";
+
             button.classList.toggle(
-                "selected", draft.draftId === selectedDraftId
-            );
-            button.setAttribute(
-                "aria-pressed", String(draft.draftId === selectedDraftId)
+                "selected",
+                draft.draftId === selectedDraftId
             );
 
-            const state = draft.status === "CONFIRMED" ? "已确认"
-                : draft.status === "PENDING_CONFIRMATION"
-                    ? "待确认" : "状态未核实";
+            button.setAttribute(
+                "aria-pressed",
+                String(draft.draftId === selectedDraftId)
+            );
+
+            const state = draftStates[draft.status] || "状态未核实";
 
             button.textContent =
                 (draft.visitDate || "日期待查询") + " · " +
@@ -378,7 +439,8 @@
                 "\n" + draft.draftId;
 
             button.addEventListener(
-                "click", () => selectDraft(draft.draftId)
+                "click",
+                () => selectDraft(draft.draftId)
             );
 
             $("draftChoices").append(button);
@@ -392,8 +454,9 @@
         $("draftDetails").replaceChildren();
         $("draftHint").textContent = hint;
         $("confirmButton").textContent = "确认创建演示预约";
+        $("cancelButton").textContent = "取消当前草稿";
         $("confirmationNotice").textContent =
-            "请先加载并核对草稿详情，再确认。";
+            "请先加载并核对草稿详情，再进行操作。";
         updateControls();
     }
 
@@ -415,20 +478,41 @@
 
     function displayDraft(draft) {
         validateDraft(draft);
+
         drafts.set(draft.draftId, draft);
         selectedDraftId = draft.draftId;
         currentDraft = draft;
+
         $("draftIdInput").value = draft.draftId;
         $("draftDetails").replaceChildren();
 
-        const confirmed = draft.status === "CONFIRMED";
+        const presentation = {
+            PENDING_CONFIRMATION: {
+                hint: "请核对当前草稿，再决定确认或取消。",
+                button: "确认创建演示预约",
+                notice: "按钮只操作当前展示的草稿。取消后不能恢复，需要重新创建草稿。"
+            },
+            CONFIRMING: {
+                hint: "这份草稿已进入确认处理，当前不能取消。",
+                button: "重试确认同一草稿",
+                notice: "可先加载或同步查询最新结果；若仍为确认处理中，可点击重试继续处理。请勿另建草稿重试。"
+            },
+            CONFIRMED: {
+                hint: "当前草稿已确认。",
+                button: "已创建演示预约",
+                notice: "本地演示预约已创建，不代表真实医院挂号成功。当前不提供取消已创建预约的功能。"
+            },
+            CANCELLED: {
+                hint: "当前草稿已取消。",
+                button: "已取消，不能确认",
+                notice: "这份草稿已取消，记录仍然保留。如仍需预约，请重新生成草稿。"
+            }
+        }[draft.status];
 
-        $("draftHint").textContent = confirmed
-            ? "当前草稿已确认。"
-            : "请核对当前草稿，再决定是否确认。";
+        $("draftHint").textContent = presentation.hint;
 
         addDetail("草稿编号", draft.draftId);
-        addDetail("状态", confirmed ? "已确认" : "待确认");
+        addDetail("状态", draftStates[draft.status]);
         addDetail("医院编号（演示）", draft.hospitalId);
         addDetail("科室", draft.department);
         addDetail("预约日期", draft.visitDate);
@@ -436,23 +520,28 @@
         addDetail("预约编号", draft.appointmentId);
         addDetail("说明", draft.message);
 
-        $("confirmButton").textContent = confirmed
-            ? "已创建演示预约"
-            : "确认创建演示预约";
+        $("confirmButton").textContent = presentation.button;
+        $("cancelButton").textContent = draft.status === "CANCELLED"
+            ? "草稿已取消"
+            : "取消当前草稿";
 
-        $("confirmationNotice").textContent = confirmed
-            ? "本地演示预约已创建，不代表真实医院挂号成功。"
-            : "按钮只确认当前展示的草稿。聊天中的“确认”不会创建预约。";
+        $("confirmationNotice").textContent = presentation.notice;
 
+        resolvePendingOperation(draft);
         renderChoices();
         saveSession();
     }
 
     async function request(url, options = {}) {
-        const response = await fetch(url, {...options, cache: "no-store"});
+        const response = await fetch(url, {
+            ...options,
+            cache: "no-store"
+        });
 
         if (!response.ok) {
-            throw new Error("请求失败，HTTP 状态码：" + response.status);
+            throw new Error(
+                "请求失败，HTTP 状态码：" + response.status
+            );
         }
 
         return response.json();
@@ -483,7 +572,9 @@
         if (busy) return;
         setBusy(true);
 
-        if (drafts.has(draftId)) selectedDraftId = draftId;
+        if (drafts.has(draftId)) {
+            selectedDraftId = draftId;
+        }
 
         renderChoices();
         saveSession();
@@ -534,7 +625,8 @@
     $("exampleButton").addEventListener("click", () => {
         $("messageInput").value =
             "我选择 DEMO001 的内科，预约日期是 " +
-            tomorrowInShanghai() + "。请帮我生成一份演示预约草稿。";
+            tomorrowInShanghai() +
+            "。请帮我生成一份演示预约草稿。";
 
         $("messageInput").focus();
         setStatus("已填入示例，请核对日期后发送。");
@@ -549,9 +641,12 @@
 
         addMessage("user", message);
         $("messageInput").value = "";
+
         setBusy(true);
         setStatus("小智正在回复，请稍候……");
+
         pendingOperation = "聊天请求";
+        pendingDraftId = null;
         saveSession();
 
         try {
@@ -607,7 +702,10 @@
             showUnavailable(
                 "本轮结果未完整取得，请点击“同步当前会话草稿”核实。"
             );
-            setStatus(error.message + "。请求不会自动重发。", true);
+            setStatus(
+                error.message + "。请求不会自动重发。",
+                true
+            );
         } finally {
             saveSession();
             showOperationNotice();
@@ -620,52 +718,146 @@
         selectDraft($("draftIdInput").value.trim());
     });
 
-    $("confirmButton").addEventListener("click", async () => {
-        if (busy || !currentDraft ||
-            currentDraft.status !== "PENDING_CONFIRMATION" ||
-            currentDraft.appointmentId != null) return;
+    function markUnverified(draftId) {
+        const draft = drafts.get(draftId);
+
+        if (draft) {
+            drafts.set(draftId, {
+                ...draft,
+                status: "UNVERIFIED"
+            });
+        }
+
+        showUnavailable(
+            "操作结果尚未核实，正在重新查询当前草稿……"
+        );
+        renderChoices();
+    }
+
+    async function runDraftAction(action) {
+        if (busy || (action === "confirm"
+            ? !canConfirm(currentDraft)
+            : !canCancel(currentDraft))) {
+            return;
+        }
 
         const draftId = currentDraft.draftId;
+        const isCancel = action === "cancel";
+
+        if (isCancel && !window.confirm(
+            "确定取消这份草稿吗？\n" +
+            currentDraft.visitDate + " · " +
+            currentDraft.department + "\n" +
+            draftId + "\n取消后不能再确认这份草稿。"
+        )) {
+            return;
+        }
+
         setBusy(true);
-        setStatus("正在确认当前展示的草稿……");
-        pendingOperation = "预约确认请求";
+
+        pendingOperation = isCancel
+            ? "取消草稿请求"
+            : "预约确认请求";
+
+        pendingDraftId = draftId;
         saveSession();
+        showOperationNotice();
+
+        setStatus(isCancel
+            ? "正在取消当前草稿……"
+            : "正在确认当前草稿……");
+
+        const url =
+            "/api/appointments/drafts/" +
+            encodeURIComponent(draftId);
 
         try {
-            const appointment = await request(
-                "/api/appointments/drafts/" +
-                encodeURIComponent(draftId) + "/confirm",
+            const result = await request(
+                url + "/" + action,
                 {method: "POST"}
             );
 
-            if (appointment.status !== "DEMO_CREATED" ||
-                !appointment.appointmentId) {
+            if (isCancel) {
+                validateDraft(result);
+
+                if (result.draftId !== draftId ||
+                    result.status !== "CANCELLED") {
+                    throw new Error("取消接口返回内容异常。");
+                }
+            } else if (result.status !== "DEMO_CREATED" ||
+                !result.appointmentId) {
                 throw new Error("确认接口返回内容异常。");
             }
 
-            await refreshDraft(draftId);
+            const latest = await fetchDraft(draftId);
 
-            if (currentDraft.status !== "CONFIRMED" ||
-                currentDraft.appointmentId !== appointment.appointmentId) {
-                throw new Error("确认结果与草稿查询结果不一致。");
+            if (isCancel
+                ? latest.status !== "CANCELLED"
+                : latest.status !== "CONFIRMED" ||
+                latest.appointmentId !== result.appointmentId) {
+                throw new Error(
+                    "操作结果与草稿查询结果不一致。"
+                );
             }
 
-            pendingOperation = "";
-            setStatus("演示预约已创建，列表状态已更新。");
+            displayDraft(latest);
+
+            setStatus(isCancel
+                ? "草稿已取消，记录仍保留在列表中。"
+                : "演示预约已创建，列表状态已更新。");
         } catch (error) {
-            showUnavailable(
-                "确认结果尚未核实，请点击列表中的同一份草稿重新查询。"
-            );
-            setStatus(
-                error.message + "。请勿另建草稿来重试此次确认。",
-                true
-            );
+            // POST 失败也可能已经写入。
+            // 这里只查询，不自动重发操作。
+            markUnverified(draftId);
+
+            try {
+                const latest = await fetchDraft(draftId);
+                displayDraft(latest);
+
+                const completed = isCancel
+                    ? latest.status === "CANCELLED"
+                    : latest.status === "CONFIRMED";
+
+                if (completed) {
+                    setStatus(
+                        "操作响应未完整取得；已通过查询核实，当前草稿" +
+                        draftStates[latest.status] + "。"
+                    );
+                } else {
+                    setStatus(
+                        error.message +
+                        " 当前状态：" + draftStates[latest.status] +
+                        "。请按右侧提示操作；请求不会自动重发。",
+                        true
+                    );
+                }
+            } catch (queryError) {
+                showUnavailable(
+                    "未能核实操作结果，请重新加载同一份草稿或点击同步。"
+                );
+
+                setStatus(
+                    error.message +
+                    " 查询也未成功：" + queryError.message,
+                    true
+                );
+            }
         } finally {
             saveSession();
             showOperationNotice();
             setBusy(false);
         }
-    });
+    }
+
+    $("confirmButton").addEventListener(
+        "click",
+        () => runDraftAction("confirm")
+    );
+
+    $("cancelButton").addEventListener(
+        "click",
+        () => runDraftAction("cancel")
+    );
 
     $("newChatButton").addEventListener("click", () => {
         if (busy) return;
@@ -674,6 +866,7 @@
         drafts.clear();
         history = [];
         pendingOperation = "";
+        pendingDraftId = null;
         showOperationNotice();
         selectedDraftId = null;
 
@@ -684,6 +877,7 @@
         showUnavailable(
             "新会话已开始。旧草稿和预约仍保留在数据库中。"
         );
+
         renderChoices();
         setStatus("");
 
@@ -699,7 +893,10 @@
         showUnavailable("正在从后端同步草稿……");
 
         for (const [id, draft] of drafts) {
-            drafts.set(id, {...draft, status: "UNVERIFIED"});
+            drafts.set(id, {
+                ...draft,
+                status: "UNVERIFIED"
+            });
         }
 
         renderChoices();
@@ -726,7 +923,8 @@
             listError = error.message;
         }
 
-        // 单独核实旧版草稿、手动加载项和不在最近 100 份中的已知草稿。
+        // 单独核实旧版草稿、手动加载项，
+        // 以及不在最近 100 份中的已知草稿。
         const unresolved = [...drafts.values()]
             .filter(draft => draft.status === "UNVERIFIED")
             .map(draft => draft.draftId);
@@ -747,7 +945,7 @@
             displayDraft(selected);
         } else {
             showUnavailable(selectedDraftId
-                ? "当前草稿尚未核实，请点击列表重试；核实前不能确认。"
+                ? "当前草稿尚未核实，请点击列表重试；核实前不能操作。"
                 : drafts.size
                     ? "请选择一份草稿，核对详情后再确认。"
                     : "当前没有已加载的草稿。");
@@ -843,7 +1041,8 @@
 
             pendingOperation =
                 typeof saved.pendingOperation === "string"
-                    ? saved.pendingOperation : "";
+                    ? saved.pendingOperation
+                    : "";
 
             const ids = [...new Set(saved.draftIds)];
 
@@ -855,7 +1054,16 @@
             );
 
             selectedDraftId = ids.includes(saved.selectedDraftId)
-                ? saved.selectedDraftId : null;
+                ? saved.selectedDraftId
+                : null;
+
+            pendingDraftId =
+                typeof saved.pendingDraftId === "string" &&
+                draftIdPattern.test(saved.pendingDraftId)
+                    ? saved.pendingDraftId
+                    : pendingOperation === "预约确认请求"
+                        ? selectedDraftId
+                        : null;
         } else {
             addMessage(
                 "assistant",

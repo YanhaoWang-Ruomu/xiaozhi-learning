@@ -72,6 +72,13 @@ public class AppointmentController {
         return draftService.confirm(draftId);
     }
 
+    @PostMapping("/drafts/{draftId}/cancel")
+    public AppointmentDraftResponse cancelDraft(
+            @PathVariable("draftId") String draftId) {
+
+        return draftService.cancel(draftId);
+    }
+
     @GetMapping("/{appointmentId}")
     public AppointmentResponse findAppointment(
             @PathVariable("appointmentId") String appointmentId) {
