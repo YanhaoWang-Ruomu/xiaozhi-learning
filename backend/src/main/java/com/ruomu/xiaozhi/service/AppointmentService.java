@@ -25,7 +25,7 @@ import java.util.UUID;
 @Service
 public class AppointmentService {
 
-    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId ZONE = AppointmentBookingPolicy.ZONE;
 
     private final AppointmentMapper mapper;
     private final JdbcTemplate jdbc;
@@ -37,7 +37,6 @@ public class AppointmentService {
             DataSource dataSource) {
 
         initializer.initialize();
-
         this.mapper = mapper;
         this.jdbc = new JdbcTemplate(dataSource);
         this.tx = new TransactionTemplate(
@@ -52,7 +51,7 @@ public class AppointmentService {
         );
         tx.setTimeout(15);
 
-        // 缺少新表时直接阻止启动。
+        // 缺少新表时直接阻止启动，避免到确认预约时才发现。
         jdbc.queryForObject(
                 "SELECT COUNT(*) FROM demo_appointment_attempts WHERE 1 = 0",
                 Long.class
@@ -79,9 +78,7 @@ public class AppointmentService {
             String draftId) {
 
         String key = requireRequestId("draft:" + draftId);
-        AppointmentEntity existing = mapper.selectById(
-                appointmentId(key)
-        );
+        AppointmentEntity existing = mapper.selectById(appointmentId(key));
 
         return existing == null
                 ? null
@@ -92,27 +89,10 @@ public class AppointmentService {
             CreateAppointmentRequest request,
             Instant acceptedAt) {
 
-        if (request == null) {
-            throw badRequest("请求内容不能为空");
-        }
-
-        if (!"DEMO001".equals(normalize(request.hospitalId()))) {
-            throw badRequest("当前仅支持演示医院 DEMO001");
-        }
-
-        if (!"内科".equals(normalize(request.department()))) {
-            throw badRequest("当前演示仅支持内科");
-        }
-
-        LocalDate today = acceptedAt.atZone(ZONE).toLocalDate();
-        LocalDate date = request.visitDate();
-
-        if (date == null
-                || !date.isAfter(today)
-                || date.isAfter(today.plusDays(3))) {
-
-            throw badRequest("日期必须为上海时区的明天至未来第3天");
-        }
+        AppointmentBookingPolicy.validateConfirmation(
+                request,
+                acceptedAt
+        );
     }
 
     private AppointmentResponse createAt(
@@ -127,9 +107,7 @@ public class AppointmentService {
         String requestId = requireRequestId(key);
         String id = appointmentId(requestId);
 
-        // 已有结果优先返回，兼容跨天重试和已取消的预约。
         AppointmentEntity existing = mapper.selectById(id);
-
         if (existing != null) {
             return reuseExisting(existing, requestId, request);
         }
@@ -147,10 +125,9 @@ public class AppointmentService {
 
         Decision decision = Objects.requireNonNull(
                 tx.execute(transaction -> {
-
-                    // 锁的顺序：先请求编号，再排班。
-                    jdbc.update(
-                            """
+                    // 先锁请求编号，再锁排班。
+                    // 相同请求只能得到同一个最终结果。
+                    jdbc.update("""
                             INSERT INTO demo_appointment_attempts
                                 (request_id, hospital_id, department,
                                  visit_date, status)
@@ -164,8 +141,7 @@ public class AppointmentService {
                             Date.valueOf(request.visitDate())
                     );
 
-                    Attempt attempt = jdbc.queryForObject(
-                            """
+                    Attempt attempt = jdbc.queryForObject("""
                             SELECT hospital_id, department, visit_date,
                                    status, reason
                             FROM demo_appointment_attempts
@@ -192,19 +168,19 @@ public class AppointmentService {
                         );
                     }
 
-                    // 等待请求锁期间，其他请求可能已经创建成功。
                     AppointmentEntity saved = mapper.selectById(id);
 
                     if (saved != null) {
-                        AppointmentResponse response =
-                                reuseExisting(saved, requestId, request);
+                        AppointmentResponse response = reuseExisting(
+                                saved,
+                                requestId,
+                                request
+                        );
 
                         finishAttempt(requestId, "CREATED", "");
-
                         return new Decision(response, null);
                     }
 
-                    // 已经明确拒绝的请求，重试仍然拒绝。
                     if ("REJECTED".equals(attempt.status())) {
                         return new Decision(null, attempt.reason());
                     }
@@ -261,13 +237,12 @@ public class AppointmentService {
                     }
 
                     finishAttempt(requestId, "CREATED", "");
-
                     return new Decision(toResponse(entity), null);
                 })
         );
 
-        // 必须等事务提交后再抛出拒绝异常，
-        // 否则刚保存的 REJECTED 结果会一起回滚。
+        // 在事务成功提交后才抛业务拒绝，
+        // 确保拒绝结果不会被回滚。
         if (decision.rejection() != null) {
             throw new AppointmentRejectedException(
                     decision.rejection()
@@ -288,11 +263,9 @@ public class AppointmentService {
             String reason) {
 
         jdbc.update(
-                """
-                UPDATE demo_appointment_attempts
-                SET status = ?, reason = ?
-                WHERE request_id = ?
-                """,
+                "UPDATE demo_appointment_attempts "
+                        + "SET status = ?, reason = ? "
+                        + "WHERE request_id = ?",
                 status,
                 reason,
                 key
@@ -328,9 +301,8 @@ public class AppointmentService {
 
         return Objects.requireNonNull(
                 tx.execute(transaction -> {
-
-                    // 与创建预约使用相同的排班锁。
-                    // 历史预约即使没有对应排班，也允许取消。
+                    // 与创建使用同一排班锁。
+                    // 历史预约即使没有排班也允许取消。
                     mapper.lockCapacity(
                             original.getHospitalId(),
                             original.getDepartment(),
@@ -352,8 +324,8 @@ public class AppointmentService {
                         throw conflict("当前预约状态不允许取消");
                     }
 
-                    // 通过有效预约数变化释放名额。
-                    // 重复取消不会再少一条，因此不会多返名额。
+                    // 有效预约数自动少一条，不另外累加名额。
+                    // 重复取消不会多返名额。
                     return toResponse(saved);
                 })
         );
@@ -368,13 +340,16 @@ public class AppointmentService {
                 || !Objects.equals(entity.getRequestId(), key)
                 || !Objects.equals(
                 entity.getHospitalId(),
-                normalize(request.hospitalId()))
+                normalize(request.hospitalId())
+        )
                 || !Objects.equals(
                 entity.getDepartment(),
-                normalize(request.department()))
+                normalize(request.department())
+        )
                 || !Objects.equals(
                 entity.getVisitDate(),
-                request.visitDate())) {
+                request.visitDate()
+        )) {
 
             throw conflict(
                     "同一个 Idempotency-Key 不能用于不同的预约内容"
@@ -447,8 +422,10 @@ public class AppointmentService {
                 entity.getVisitDate(),
                 entity.getTimeZone(),
                 "DEMO_CANCELLED".equals(entity.getStatus())
-                        ? "本地演示预约已取消，记录保留；不涉及真实医院退号或退款。"
-                        : "仅创建本地演示预约记录，不代表真实医院挂号成功。",
+                        ? "本地演示预约已取消，记录保留；"
+                        + "不涉及真实医院退号或退款。"
+                        : "仅创建本地演示预约记录，"
+                        + "不代表真实医院挂号成功。",
                 entity.getCancelledAt()
         );
     }

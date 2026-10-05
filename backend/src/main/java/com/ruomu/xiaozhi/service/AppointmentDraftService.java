@@ -14,7 +14,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -28,7 +27,8 @@ import static com.mongodb.client.model.Updates.set;
 @Service
 public class AppointmentDraftService {
 
-    private static final String TIME_ZONE = "Asia/Shanghai";
+    private static final String TIME_ZONE =
+            AppointmentBookingPolicy.ZONE.getId();
 
     private final MongoCollection<Document> collection;
     private final AppointmentService appointmentService;
@@ -53,46 +53,24 @@ public class AppointmentDraftService {
             CreateAppointmentRequest request,
             String conversationId) {
 
-        return insertDraft(
-                request,
-                requireConversationId(conversationId)
-        );
+        String normalizedId = requireConversationId(conversationId);
+        return insertDraft(request, normalizedId);
     }
 
     private AppointmentDraftResponse insertDraft(
             CreateAppointmentRequest request,
             String conversationId) {
 
-        if (request == null) {
-            throw badRequest("预约请求不能为空");
-        }
+        // 草稿只检查医院、科室和日期范围，
+        // 不要求已经放号。
+        AppointmentBookingPolicy.validateSelection(
+                request,
+                Instant.now()
+        );
 
         String hospitalId = normalize(request.hospitalId());
         String department = normalize(request.department());
         LocalDate visitDate = request.visitDate();
-
-        if (!"DEMO001".equals(hospitalId)) {
-            throw badRequest("当前仅支持演示医院 DEMO001");
-        }
-
-        if (!"内科".equals(department)) {
-            throw badRequest("当前仅支持演示科室：内科");
-        }
-
-        if (visitDate == null) {
-            throw badRequest("请提供预约日期");
-        }
-
-        LocalDate today = LocalDate.now(ZoneId.of(TIME_ZONE));
-
-        if (!visitDate.isAfter(today)
-                || visitDate.isAfter(today.plusDays(3))) {
-
-            throw badRequest(
-                    "预约日期必须是上海时区明天起的未来 3 天内"
-            );
-        }
-
         String draftId = "DRAFT-" + UUID.randomUUID();
 
         Document document = new Document("_id", draftId)
@@ -108,7 +86,6 @@ public class AppointmentDraftService {
         }
 
         collection.insertOne(document);
-
         return toResponse(document);
     }
 
@@ -120,7 +97,6 @@ public class AppointmentDraftService {
             String conversationId) {
 
         String normalizedId = requireConversationId(conversationId);
-
         List<AppointmentDraftResponse> responses = new ArrayList<>();
 
         collection.find(eq("conversationId", normalizedId))
@@ -141,6 +117,8 @@ public class AppointmentDraftService {
         if ("PENDING_CONFIRMATION".equals(draft.getString("status"))) {
             Instant acceptedAt = Instant.now();
 
+            // 在修改草稿状态前校验。
+            // 未放号时抛出409，草稿仍为待确认。
             appointmentService.validateForConfirmation(
                     toRequest(draft),
                     acceptedAt
@@ -154,13 +132,18 @@ public class AppointmentDraftService {
                     ),
                     combine(
                             set("status", "CONFIRMING"),
-                            set("confirmationStartedAt", acceptedAt.toString())
+                            set(
+                                    "confirmationStartedAt",
+                                    acceptedAt.toString()
+                            )
                     ),
                     new FindOneAndUpdateOptions()
                             .returnDocument(ReturnDocument.AFTER)
             );
 
-            draft = claimed == null ? requireDraft(id) : claimed;
+            draft = claimed == null
+                    ? requireDraft(id)
+                    : claimed;
         }
 
         String status = draft.getString("status");
@@ -178,7 +161,9 @@ public class AppointmentDraftService {
         }
 
         if (!"CONFIRMING".equals(status)) {
-            throw conflict("当前草稿状态不允许确认，请重新查询");
+            throw conflict(
+                    "当前草稿状态不允许确认，请重新查询"
+            );
         }
 
         String acceptedAtText = draft.getString(
@@ -186,7 +171,9 @@ public class AppointmentDraftService {
         );
 
         if (acceptedAtText == null) {
-            throw conflict("草稿缺少首次确认时间，请检查后台记录");
+            throw conflict(
+                    "草稿缺少首次确认时间，请检查后台记录"
+            );
         }
 
         AppointmentResponse appointment;
@@ -198,10 +185,9 @@ public class AppointmentDraftService {
                     Instant.parse(acceptedAtText)
             );
         } catch (AppointmentRejectedException exception) {
-
-            // 只有 MySQL 已保存明确的拒绝结果时，才关闭草稿。
-            // 网络异常、超时等未知结果继续保留 CONFIRMING，
-            // 重试时使用原来的幂等键恢复结果。
+            // 只关闭已经在MySQL持久化拒绝的草稿。
+            // 网络异常、超时、未知提交结果仍保留CONFIRMING，
+            // 以便安全重试。
             collection.updateOne(
                     and(
                             eq("_id", id),
@@ -226,7 +212,10 @@ public class AppointmentDraftService {
                 ),
                 combine(
                         set("status", "CONFIRMED"),
-                        set("appointmentId", appointment.appointmentId()),
+                        set(
+                                "appointmentId",
+                                appointment.appointmentId()
+                        ),
                         set("confirmedAt", Instant.now().toString())
                 )
         );
@@ -236,7 +225,8 @@ public class AppointmentDraftService {
 
             if (!"CONFIRMED".equals(latest.getString("status"))
                     || !appointment.appointmentId().equals(
-                    latest.getString("appointmentId"))) {
+                    latest.getString("appointmentId")
+            )) {
 
                 throw conflict(
                         "预约结果与草稿状态不一致，请检查后台记录"
@@ -244,6 +234,8 @@ public class AppointmentDraftService {
             }
         }
 
+        // 返回前重新查询，
+        // 不能将已经取消的预约当作新创建成功。
         return requireActiveAppointment(
                 appointment.appointmentId()
         );
@@ -291,7 +283,9 @@ public class AppointmentDraftService {
                             .returnDocument(ReturnDocument.AFTER)
             );
 
-            draft = cancelled == null ? requireDraft(id) : cancelled;
+            draft = cancelled == null
+                    ? requireDraft(id)
+                    : cancelled;
         }
 
         return switch (draft.getString("status")) {
@@ -352,7 +346,16 @@ public class AppointmentDraftService {
                         .returnDocument(ReturnDocument.AFTER)
         );
 
-        return repaired == null ? requireDraft(id) : repaired;
+        return repaired == null
+                ? requireDraft(id)
+                : repaired;
+    }
+
+    private ResponseStatusException conflict(String message) {
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                message
+        );
     }
 
     private Document requireDraft(String draftId) {
@@ -377,17 +380,19 @@ public class AppointmentDraftService {
     private AppointmentDraftResponse toResponse(Document document) {
         String status = document.getString("status");
 
-        // 保留历史确认事实，对外展示关联预约的当前状态。
+        // 数据库草稿仍为CONFIRMED，代表历史上已确认。
+        // 页面状态从关联预约实时推导。
         if ("CONFIRMED".equals(status)) {
-            AppointmentResponse appointment =
-                    appointmentService.findById(
-                            document.getString("appointmentId")
-                    );
+            AppointmentResponse appointment = appointmentService.findById(
+                    document.getString("appointmentId")
+            );
 
             if ("DEMO_CANCELLED".equals(appointment.status())) {
                 status = "APPOINTMENT_CANCELLED";
             } else if (!"DEMO_CREATED".equals(appointment.status())) {
-                throw conflict("关联预约状态异常，请检查后台记录");
+                throw conflict(
+                        "关联预约状态异常，请检查后台记录"
+                );
             }
         }
 
@@ -400,7 +405,8 @@ public class AppointmentDraftService {
                             + "可重试同一草稿的确认请求以继续处理。";
 
             case "CONFIRMED" ->
-                    "已确认并创建本地演示预约，不代表真实医院挂号成功。";
+                    "已确认并创建本地演示预约，"
+                            + "不代表真实医院挂号成功。";
 
             case "APPOINTMENT_CANCELLED" ->
                     "关联的演示预约已取消，草稿与预约记录均保留；"
@@ -413,7 +419,8 @@ public class AppointmentDraftService {
                             : "确认失败，草稿已关闭："
                             + document.getString("failureReason");
 
-            default -> "草稿状态异常，请检查后台记录。";
+            default ->
+                    "草稿状态异常，请检查后台记录。";
         };
 
         return new AppointmentDraftResponse(
@@ -449,13 +456,6 @@ public class AppointmentDraftService {
     private ResponseStatusException badRequest(String message) {
         return new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
-                message
-        );
-    }
-
-    private ResponseStatusException conflict(String message) {
-        return new ResponseStatusException(
-                HttpStatus.CONFLICT,
                 message
         );
     }

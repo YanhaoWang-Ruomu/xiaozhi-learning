@@ -18,7 +18,10 @@ public record AppointmentScheduleResponse(
             LocalDate visitDate,
             int totalCapacity,
             long activeAppointmentCount,
-            long referenceRemaining
+            long referenceRemaining,
+            String releaseAt,
+            String bookingStatus,
+            boolean bookable
     ) {
     }
 }
