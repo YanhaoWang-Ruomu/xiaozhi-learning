@@ -1,6 +1,8 @@
 package com.ruomu.xiaozhi.service;
 
 import com.ruomu.xiaozhi.dto.KnowledgePreviewResponse;
+import com.ruomu.xiaozhi.dto.KnowledgePreviewResponse.Chunk;
+import com.ruomu.xiaozhi.dto.KnowledgePreviewResponse.DocumentSummary;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.parser.TextDocumentParser;
 import dev.langchain4j.data.document.splitter.DocumentSplitters;
@@ -10,83 +12,129 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.TreeSet;
 
 @Service
 public class KnowledgeDocumentService {
 
-    private static final Logger log =
-            LoggerFactory.getLogger(KnowledgeDocumentService.class);
-
-    private static final String RESOURCE_PATH =
-            "knowledge/demo-guide.txt";
-
+    private static final Logger log = LoggerFactory.getLogger(KnowledgeDocumentService.class);
+    private static final String ROOT = "knowledge/";
+    private static final String CATALOG = ROOT + "catalog.txt";
     private static final int MAX_SEGMENT_SIZE = 300;
     private static final int MAX_OVERLAP_SIZE = 40;
+    private static final int MAX_FILE_BYTES = 1024 * 1024;
 
     private final KnowledgePreviewResponse preview;
 
     public KnowledgeDocumentService() {
-        ClassPathResource resource =
-                new ClassPathResource(RESOURCE_PATH);
+        try {
+            List<String> sources = readCatalog();
+            List<Chunk> chunks = new ArrayList<>();
+            List<DocumentSummary> documents = new ArrayList<>();
 
-        try (InputStream input = resource.getInputStream()) {
-            // 使用 UTF-8 解析纯文本文件。
-            Document document =
-                    new TextDocumentParser(StandardCharsets.UTF_8)
-                            .parse(input);
+            for (String source : sources) {
+                String text = readUtf8(source);
+                if (text.isBlank()) {
+                    throw new IllegalArgumentException("知识文件内容为空：" + source);
+                }
 
-            // 来源信息会传递到分段结果中。
-            document.metadata().put("source", RESOURCE_PATH);
-            document.metadata().put("document_type", "DEMO");
+                // 使用资源流读取，IDEA 运行和打包成 JAR 后均无需本机绝对路径。
+                Document document;
+                try (InputStream input = new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8))) {
+                    document = new TextDocumentParser(StandardCharsets.UTF_8).parse(input);
+                }
+                document.metadata().put("source", source);
+                document.metadata().put("document_type", "DEMO");
 
-            // 这两个参数以字符为单位，不是 token 数量。
-            List<TextSegment> segments = DocumentSplitters
-                    .recursive(MAX_SEGMENT_SIZE, MAX_OVERLAP_SIZE)
-                    .split(document);
+                // 每份文档单独切分，避免一个片段混入两份文档的内容。
+                // 这里的 300 和 40 是字符数，不是 token 数。
+                List<TextSegment> segments = DocumentSplitters
+                        .recursive(MAX_SEGMENT_SIZE, MAX_OVERLAP_SIZE)
+                        .split(document);
+                if (segments.isEmpty()) {
+                    throw new IllegalArgumentException("知识文件没有有效片段：" + source);
+                }
 
-            List<KnowledgePreviewResponse.Chunk> chunks =
-                    new ArrayList<>();
-
-            for (int i = 0; i < segments.size(); i++) {
-                TextSegment segment = segments.get(i);
-
-                chunks.add(new KnowledgePreviewResponse.Chunk(
-                        i,
-                        segment.metadata().getString("source"),
-                        segment.text().length(),
-                        segment.text()
-                ));
+                int firstIndex = chunks.size();
+                for (TextSegment segment : segments) {
+                    chunks.add(new Chunk(chunks.size(), source,
+                            segment.text().length(), segment.text()));
+                }
+                documents.add(new DocumentSummary(source, text.length(), firstIndex, segments.size()));
+                log.info("知识文件加载完成：source={}, chunks={}", source, segments.size());
             }
 
             preview = new KnowledgePreviewResponse(
-                    RESOURCE_PATH,
-                    chunks.size(),
-                    MAX_SEGMENT_SIZE,
-                    MAX_OVERLAP_SIZE,
-                    List.copyOf(chunks)
-            );
-
-            log.info(
-                    "演示知识文档加载完成：source={}, chunks={}",
-                    RESOURCE_PATH,
-                    chunks.size()
-            );
+                    CATALOG, chunks.size(), MAX_SEGMENT_SIZE, MAX_OVERLAP_SIZE,
+                    List.copyOf(chunks), documents.size(), List.copyOf(documents));
+            log.info("多文档知识库加载完成：documents={}, chunks={}",
+                    preview.documentCount(), preview.chunkCount());
         } catch (IOException | RuntimeException e) {
-            throw new IllegalStateException(
-                    "无法加载演示知识文档，请检查 src/main/resources/"
-                            + RESOURCE_PATH
-                            + " 是否存在、内容非空且保存为 UTF-8",
-                    e
-            );
+            // 不静默跳过缺失或损坏的文件，避免用户以为资料已全部进入知识库。
+            throw new IllegalStateException("知识库加载失败：" + e.getMessage()
+                    + "。请检查 src/main/resources/knowledge/catalog.txt 及列出的 UTF-8 文件", e);
         }
     }
 
     public KnowledgePreviewResponse preview() {
         return preview;
+    }
+
+    private static List<String> readCatalog() throws IOException {
+        // 固定按文件名排序：调整清单行顺序不改变片段顺序和资料版本。
+        TreeSet<String> sources = new TreeSet<>();
+        String[] lines = readUtf8(CATALOG).split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            String filename = lines[i].strip();
+            if (filename.isEmpty() || filename.startsWith("#")) {
+                continue;
+            }
+            String lower = filename.toLowerCase(Locale.ROOT);
+            if (filename.startsWith(".") || filename.contains("/")
+                    || filename.contains("\\") || filename.contains(":")
+                    || filename.chars().anyMatch(Character::isISOControl)
+                    || !(lower.endsWith(".txt") || lower.endsWith(".md"))
+                    || lower.equals("catalog.txt")) {
+                throw new IllegalArgumentException("清单第 " + (i + 1)
+                        + " 行无效：只填写 knowledge 目录内的 TXT 或 MD 文件名：" + filename);
+            }
+            if (!sources.add(ROOT + filename)) {
+                throw new IllegalArgumentException("清单重复列出了文件：" + filename);
+            }
+        }
+        if (sources.isEmpty()) {
+            throw new IllegalArgumentException("知识资料清单为空");
+        }
+        return List.copyOf(sources);
+    }
+
+    private static String readUtf8(String source) throws IOException {
+        try (InputStream input = new ClassPathResource(source).getInputStream()) {
+            byte[] bytes = input.readNBytes(MAX_FILE_BYTES + 1);
+            if (bytes.length > MAX_FILE_BYTES) {
+                throw new IOException("单个知识文件超过当前演示上限 1 MiB：" + source);
+            }
+            // 不把乱码悄悄转换为替换字符；明确提示用户按 UTF-8 保存。
+            String text = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes)).toString();
+            if (text.startsWith("\uFEFF")) {
+                text = text.substring(1);
+            }
+            // 统一 Windows / Linux 换行，避免仅换行不同就生成新资料版本。
+            return text.replace("\r\n", "\n").replace('\r', '\n').strip();
+        } catch (IOException e) {
+            throw new IOException("无法读取 UTF-8 资源 " + source + "：" + e.getMessage(), e);
+        }
     }
 }
