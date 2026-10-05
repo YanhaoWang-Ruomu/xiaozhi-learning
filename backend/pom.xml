@@ -34,14 +34,25 @@
             <artifactId>langchain4j-community-dashscope</artifactId>
             <version>1.0.0-beta3</version>
         </dependency>
+
+        <!-- LangChain4j 核心功能 -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j</artifactId>
             <version>1.0.0-beta3</version>
         </dependency>
+
+        <!-- MongoDB 数据存储 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-mongodb</artifactId>
+        </dependency>
+
+        <!-- PDF 文本解析 -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-document-parser-apache-pdfbox</artifactId>
+            <version>1.0.0-beta3</version>
         </dependency>
     </dependencies>
 
