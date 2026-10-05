@@ -1,14 +1,11 @@
 package com.ruomu.xiaozhi.service;
 
-import com.mongodb.ErrorCategory;
-import com.mongodb.MongoWriteException;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.model.FindOneAndUpdateOptions;
-import com.mongodb.client.model.ReturnDocument;
+import com.ruomu.xiaozhi.config.AppointmentStorageInitializer;
 import com.ruomu.xiaozhi.dto.AppointmentResponse;
 import com.ruomu.xiaozhi.dto.CreateAppointmentRequest;
-import org.bson.Document;
-import org.springframework.data.mongodb.core.MongoTemplate;
+import com.ruomu.xiaozhi.entity.AppointmentEntity;
+import com.ruomu.xiaozhi.mapper.AppointmentMapper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -20,23 +17,19 @@ import java.time.ZoneId;
 import java.util.Objects;
 import java.util.UUID;
 
-import static com.mongodb.client.model.Filters.eq;
-import static com.mongodb.client.model.Filters.and;
-import static com.mongodb.client.model.Updates.combine;
-import static com.mongodb.client.model.Updates.set;
-
 @Service
 public class AppointmentService {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
-    private static final String DEMO_NOTICE =
-            "仅创建本地演示预约记录，不代表真实医院挂号成功。";
+    private final AppointmentMapper mapper;
 
-    private final MongoCollection<Document> collection;
+    public AppointmentService(
+            AppointmentMapper mapper,
+            AppointmentStorageInitializer initializer) {
 
-    public AppointmentService(MongoTemplate mongoTemplate) {
-        this.collection = mongoTemplate.getCollection("demo_appointments");
+        initializer.initialize();
+        this.mapper = mapper;
     }
 
     public AppointmentResponse create(
@@ -46,10 +39,6 @@ public class AppointmentService {
         return createAt(request, idempotencyKey, Instant.now());
     }
 
-    /*
-     * 仅供同包的草稿业务调用。
-     * 时间必须来自数据库中的首次确认记录。
-     */
     AppointmentResponse createForConfirmedDraft(
             CreateAppointmentRequest request,
             String draftId,
@@ -62,19 +51,15 @@ public class AppointmentService {
         );
     }
 
-    /*
-     * 兼容旧版本：
-     * 预约已经写入，但草稿状态尚未更新的情况。
-     */
     AppointmentResponse findExistingForDraft(
             CreateAppointmentRequest request,
             String draftId) {
 
         String requestId = requireRequestId("draft:" + draftId);
 
-        Document existing = collection.find(
-                eq("_id", appointmentId(requestId))
-        ).first();
+        AppointmentEntity existing = mapper.selectById(
+                appointmentId(requestId)
+        );
 
         return existing == null
                 ? null
@@ -98,13 +83,15 @@ public class AppointmentService {
         }
 
         LocalDate today = acceptedAt.atZone(ZONE).toLocalDate();
-        LocalDate visitDate = request.visitDate();
+        LocalDate date = request.visitDate();
 
-        if (visitDate == null
-                || !visitDate.isAfter(today)
-                || visitDate.isAfter(today.plusDays(3))) {
+        if (date == null
+                || !date.isAfter(today)
+                || date.isAfter(today.plusDays(3))) {
 
-            throw badRequest("日期必须为上海时区的明天至未来第3天");
+            throw badRequest(
+                    "日期必须为上海时区的明天至未来第3天"
+            );
         }
     }
 
@@ -120,39 +107,31 @@ public class AppointmentService {
         String requestId = requireRequestId(idempotencyKey);
         String id = appointmentId(requestId);
 
-        Document existing = collection.find(
-                eq("_id", id)
-        ).first();
+        AppointmentEntity existing = mapper.selectById(id);
 
-        // 已存在的记录优先返回，跨天重试也不会生成新预约。
+        // 先查原记录，保证跨天重试仍使用原结果，包括已取消的结果。
         if (existing != null) {
             return reuseExisting(existing, requestId, request);
         }
 
         validateForConfirmation(request, acceptedAt);
 
-        Document document = new Document("_id", id)
-                .append("requestId", requestId)
-                .append("status", "DEMO_CREATED")
-                .append("hospitalId", normalize(request.hospitalId()))
-                .append("department", normalize(request.department()))
-                .append("visitDate", request.visitDate().toString())
-                .append("timeZone", ZONE.getId())
-                .append("acceptedAt", acceptedAt.toString())
-                .append("createdAt", Instant.now().toString());
+        AppointmentEntity entity = new AppointmentEntity();
+        entity.setAppointmentId(id);
+        entity.setRequestId(requestId);
+        entity.setStatus("DEMO_CREATED");
+        entity.setHospitalId(normalize(request.hospitalId()));
+        entity.setDepartment(normalize(request.department()));
+        entity.setVisitDate(request.visitDate());
+        entity.setTimeZone(ZONE.getId());
+        entity.setAcceptedAt(acceptedAt.toString());
+        entity.setCreatedAt(Instant.now().toString());
 
         try {
-            collection.insertOne(document);
-        } catch (MongoWriteException exception) {
+            mapper.insert(entity);
 
-            if (exception.getError().getCategory()
-                    != ErrorCategory.DUPLICATE_KEY) {
-                throw exception;
-            }
-
-            Document saved = collection.find(
-                    eq("_id", id)
-            ).first();
+        } catch (DuplicateKeyException exception) {
+            AppointmentEntity saved = mapper.selectById(id);
 
             if (saved == null) {
                 throw exception;
@@ -161,120 +140,105 @@ public class AppointmentService {
             return reuseExisting(saved, requestId, request);
         }
 
-        return toResponse(document);
+        return findById(id);
     }
 
     public AppointmentResponse findById(String appointmentId) {
+        String id = requireAppointmentId(appointmentId);
 
-        if (appointmentId == null || appointmentId.isBlank()) {
-            throw badRequest("预约编号不能为空");
+        AppointmentEntity entity = mapper.selectById(id);
+
+        if (entity == null) {
+            throw notFound();
         }
 
-        Document document = collection.find(
-                eq("_id", appointmentId.strip())
-        ).first();
-
-        if (document == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "未找到该演示预约记录"
-            );
-        }
-
-        return toResponse(document);
+        return toResponse(entity);
     }
 
-    /*
-     * 仅由用户在页面明确确认后调用，不注册为大模型工具。
-     * 只改变预约记录，不删除记录，也不改变草稿的确认历史。
-     */
-    public AppointmentResponse cancel(String appointmentId, boolean confirmed) {
+    public AppointmentResponse cancel(
+            String appointmentId,
+            boolean confirmed) {
+
         if (!confirmed) {
             throw badRequest("请明确确认取消当前演示预约");
         }
-        if (appointmentId == null || appointmentId.isBlank()) {
-            throw badRequest("预约编号不能为空");
-        }
-        String id = appointmentId.strip();
 
-        // 单文档条件更新：只有第一次从有效状态转为取消时才记录时间。
-        Document cancelled = collection.findOneAndUpdate(
-                and(eq("_id", id), eq("status", "DEMO_CREATED")),
-                combine(set("status", "DEMO_CANCELLED"),
-                        set("cancelledAt", Instant.now().toString())),
-                new FindOneAndUpdateOptions().returnDocument(ReturnDocument.AFTER)
-        );
-        if (cancelled != null) {
-            return toResponse(cancelled);
-        }
+        String id = requireAppointmentId(appointmentId);
 
-        Document existing = collection.find(eq("_id", id)).first();
+        // SQL 条件更新保证只有首次取消会写入时间。
+        mapper.cancelIfActive(id, Instant.now().toString());
+
+        AppointmentEntity existing = mapper.selectById(id);
+
         if (existing == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "未找到该演示预约记录");
+            throw notFound();
         }
-        if ("DEMO_CANCELLED".equals(existing.getString("status"))) {
-            // 幂等重试：返回原记录，不改写首次取消时间。
+
+        if ("DEMO_CANCELLED".equals(existing.getStatus())) {
             return toResponse(existing);
         }
-        throw new ResponseStatusException(HttpStatus.CONFLICT,
-                "当前预约状态不允许取消，请重新查询");
+
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "当前预约状态不允许取消，请重新查询"
+        );
     }
 
     private AppointmentResponse reuseExisting(
-            Document document,
+            AppointmentEntity entity,
             String requestId,
             CreateAppointmentRequest request) {
 
-        String dateText = request.visitDate() == null
-                ? null
-                : request.visitDate().toString();
+        if (request == null
+                || !Objects.equals(
+                entity.getRequestId(),
+                requestId
+        )
+                || !Objects.equals(
+                entity.getHospitalId(),
+                normalize(request.hospitalId())
+        )
+                || !Objects.equals(
+                entity.getDepartment(),
+                normalize(request.department())
+        )
+                || !Objects.equals(
+                entity.getVisitDate(),
+                request.visitDate()
+        )) {
 
-        boolean sameRequest =
-                Objects.equals(
-                        document.getString("requestId"),
-                        requestId
-                )
-                        && Objects.equals(
-                        document.getString("hospitalId"),
-                        normalize(request.hospitalId())
-                )
-                        && Objects.equals(
-                        document.getString("department"),
-                        normalize(request.department())
-                )
-                        && Objects.equals(
-                        document.getString("visitDate"),
-                        dateText
-                );
-
-        if (!sameRequest) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "同一个 Idempotency-Key 不能用于不同的预约内容"
             );
         }
 
-        return toResponse(document);
+        return toResponse(entity);
     }
 
     private String requireRequestId(String value) {
-
         if (value == null || value.isBlank()) {
             throw badRequest("Idempotency-Key 不能为空");
         }
 
-        String requestId = value.strip();
+        String id = value.strip();
 
-        if (requestId.length() > 128) {
+        if (id.length() > 128) {
             throw badRequest("Idempotency-Key 不能超过128个字符");
         }
 
-        return requestId;
+        return id;
+    }
+
+    private String requireAppointmentId(String value) {
+        if (value == null || value.isBlank()) {
+            throw badRequest("预约编号不能为空");
+        }
+
+        return value.strip();
     }
 
     private String appointmentId(String requestId) {
-
         return "DEMO-" + UUID.nameUUIDFromBytes(
                 ("demo-appointment:" + requestId)
                         .getBytes(StandardCharsets.UTF_8)
@@ -286,26 +250,31 @@ public class AppointmentService {
     }
 
     private ResponseStatusException badRequest(String message) {
-
         return new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 message
         );
     }
 
-    private AppointmentResponse toResponse(Document document) {
+    private ResponseStatusException notFound() {
+        return new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "未找到该演示预约记录"
+        );
+    }
 
+    private AppointmentResponse toResponse(AppointmentEntity entity) {
         return new AppointmentResponse(
-                document.getString("_id"),
-                document.getString("status"),
-                document.getString("hospitalId"),
-                document.getString("department"),
-                LocalDate.parse(document.getString("visitDate")),
-                document.getString("timeZone"),
-                "DEMO_CANCELLED".equals(document.getString("status"))
+                entity.getAppointmentId(),
+                entity.getStatus(),
+                entity.getHospitalId(),
+                entity.getDepartment(),
+                entity.getVisitDate(),
+                entity.getTimeZone(),
+                "DEMO_CANCELLED".equals(entity.getStatus())
                         ? "本地演示预约已取消，记录保留；不涉及真实医院退号或退款。"
-                        : DEMO_NOTICE,
-                document.getString("cancelledAt")
+                        : "仅创建本地演示预约记录，不代表真实医院挂号成功。",
+                entity.getCancelledAt()
         );
     }
 }
