@@ -5,12 +5,17 @@ import com.ruomu.xiaozhi.dto.AppointmentResponse;
 import com.ruomu.xiaozhi.dto.CreateAppointmentRequest;
 import com.ruomu.xiaozhi.entity.AppointmentEntity;
 import com.ruomu.xiaozhi.mapper.AppointmentMapper;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import javax.sql.DataSource;
 import java.nio.charset.StandardCharsets;
+import java.sql.Date;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -23,47 +28,64 @@ public class AppointmentService {
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
     private final AppointmentMapper mapper;
+    private final JdbcTemplate jdbc;
+    private final TransactionTemplate tx;
 
     public AppointmentService(
             AppointmentMapper mapper,
-            AppointmentStorageInitializer initializer) {
+            AppointmentStorageInitializer initializer,
+            DataSource dataSource) {
 
         initializer.initialize();
+
         this.mapper = mapper;
+        this.jdbc = new JdbcTemplate(dataSource);
+        this.tx = new TransactionTemplate(
+                new DataSourceTransactionManager(dataSource)
+        );
+
+        tx.setIsolationLevel(
+                TransactionDefinition.ISOLATION_READ_COMMITTED
+        );
+        tx.setPropagationBehavior(
+                TransactionDefinition.PROPAGATION_REQUIRES_NEW
+        );
+        tx.setTimeout(15);
+
+        // 缺少新表时直接阻止启动。
+        jdbc.queryForObject(
+                "SELECT COUNT(*) FROM demo_appointment_attempts WHERE 1 = 0",
+                Long.class
+        );
     }
 
     public AppointmentResponse create(
             CreateAppointmentRequest request,
-            String idempotencyKey) {
+            String key) {
 
-        return createAt(request, idempotencyKey, Instant.now());
+        return createAt(request, key, Instant.now());
     }
 
     AppointmentResponse createForConfirmedDraft(
             CreateAppointmentRequest request,
             String draftId,
-            Instant confirmationStartedAt) {
+            Instant acceptedAt) {
 
-        return createAt(
-                request,
-                "draft:" + draftId,
-                confirmationStartedAt
-        );
+        return createAt(request, "draft:" + draftId, acceptedAt);
     }
 
     AppointmentResponse findExistingForDraft(
             CreateAppointmentRequest request,
             String draftId) {
 
-        String requestId = requireRequestId("draft:" + draftId);
-
+        String key = requireRequestId("draft:" + draftId);
         AppointmentEntity existing = mapper.selectById(
-                appointmentId(requestId)
+                appointmentId(key)
         );
 
         return existing == null
                 ? null
-                : reuseExisting(existing, requestId, request);
+                : reuseExisting(existing, key, request);
     }
 
     void validateForConfirmation(
@@ -89,64 +111,198 @@ public class AppointmentService {
                 || !date.isAfter(today)
                 || date.isAfter(today.plusDays(3))) {
 
-            throw badRequest(
-                    "日期必须为上海时区的明天至未来第3天"
-            );
+            throw badRequest("日期必须为上海时区的明天至未来第3天");
         }
     }
 
     private AppointmentResponse createAt(
             CreateAppointmentRequest request,
-            String idempotencyKey,
+            String key,
             Instant acceptedAt) {
 
         if (request == null) {
             throw badRequest("请求内容不能为空");
         }
 
-        String requestId = requireRequestId(idempotencyKey);
+        String requestId = requireRequestId(key);
         String id = appointmentId(requestId);
 
+        // 已有结果优先返回，兼容跨天重试和已取消的预约。
         AppointmentEntity existing = mapper.selectById(id);
 
-        // 先查原记录，保证跨天重试仍使用原结果，包括已取消的结果。
         if (existing != null) {
             return reuseExisting(existing, requestId, request);
         }
 
-        validateForConfirmation(request, acceptedAt);
-
-        AppointmentEntity entity = new AppointmentEntity();
-        entity.setAppointmentId(id);
-        entity.setRequestId(requestId);
-        entity.setStatus("DEMO_CREATED");
-        entity.setHospitalId(normalize(request.hospitalId()));
-        entity.setDepartment(normalize(request.department()));
-        entity.setVisitDate(request.visitDate());
-        entity.setTimeZone(ZONE.getId());
-        entity.setAcceptedAt(acceptedAt.toString());
-        entity.setCreatedAt(Instant.now().toString());
-
-        try {
-            mapper.insert(entity);
-
-        } catch (DuplicateKeyException exception) {
-            AppointmentEntity saved = mapper.selectById(id);
-
-            if (saved == null) {
-                throw exception;
-            }
-
-            return reuseExisting(saved, requestId, request);
+        if (request.visitDate() == null) {
+            throw badRequest("请提供预约日期");
         }
 
-        return findById(id);
+        String hospital = normalize(request.hospitalId());
+        String department = normalize(request.department());
+
+        if (hospital.length() > 64 || department.length() > 64) {
+            throw badRequest("医院编号和科室分别不能超过64个字符");
+        }
+
+        Decision decision = Objects.requireNonNull(
+                tx.execute(transaction -> {
+
+                    // 锁的顺序：先请求编号，再排班。
+                    jdbc.update(
+                            """
+                            INSERT INTO demo_appointment_attempts
+                                (request_id, hospital_id, department,
+                                 visit_date, status)
+                            VALUES (?, ?, ?, ?, 'PROCESSING')
+                            ON DUPLICATE KEY UPDATE
+                                request_id = demo_appointment_attempts.request_id
+                            """,
+                            requestId,
+                            hospital,
+                            department,
+                            Date.valueOf(request.visitDate())
+                    );
+
+                    Attempt attempt = jdbc.queryForObject(
+                            """
+                            SELECT hospital_id, department, visit_date,
+                                   status, reason
+                            FROM demo_appointment_attempts
+                            WHERE request_id = ?
+                            FOR UPDATE
+                            """,
+                            (rs, row) -> new Attempt(
+                                    rs.getString("hospital_id"),
+                                    rs.getString("department"),
+                                    rs.getDate("visit_date").toLocalDate(),
+                                    rs.getString("status"),
+                                    rs.getString("reason")
+                            ),
+                            requestId
+                    );
+
+                    if (attempt == null
+                            || !hospital.equals(attempt.hospitalId())
+                            || !department.equals(attempt.department())
+                            || !request.visitDate().equals(attempt.visitDate())) {
+
+                        throw conflict(
+                                "同一个 Idempotency-Key 不能用于不同的预约内容"
+                        );
+                    }
+
+                    // 等待请求锁期间，其他请求可能已经创建成功。
+                    AppointmentEntity saved = mapper.selectById(id);
+
+                    if (saved != null) {
+                        AppointmentResponse response =
+                                reuseExisting(saved, requestId, request);
+
+                        finishAttempt(requestId, "CREATED", "");
+
+                        return new Decision(response, null);
+                    }
+
+                    // 已经明确拒绝的请求，重试仍然拒绝。
+                    if ("REJECTED".equals(attempt.status())) {
+                        return new Decision(null, attempt.reason());
+                    }
+
+                    if (!"PROCESSING".equals(attempt.status())) {
+                        throw new IllegalStateException(
+                                "确认结果与预约记录不一致，请检查数据库"
+                        );
+                    }
+
+                    validateForConfirmation(request, acceptedAt);
+
+                    Integer capacity = mapper.lockCapacity(
+                            hospital,
+                            department,
+                            request.visitDate()
+                    );
+
+                    if (capacity == null) {
+                        return reject(
+                                requestId,
+                                "该日期尚未配置演示排班；本次确认已拒绝，"
+                                        + "请重新选择日期并新建草稿。"
+                        );
+                    }
+
+                    long activeCount = mapper.countActive(
+                            hospital,
+                            department,
+                            request.visitDate()
+                    );
+
+                    if (activeCount >= capacity) {
+                        return reject(
+                                requestId,
+                                "该日期演示名额已满；本次确认已拒绝，"
+                                        + "如需再次预约请新建草稿。"
+                        );
+                    }
+
+                    AppointmentEntity entity = new AppointmentEntity();
+                    entity.setAppointmentId(id);
+                    entity.setRequestId(requestId);
+                    entity.setStatus("DEMO_CREATED");
+                    entity.setHospitalId(hospital);
+                    entity.setDepartment(department);
+                    entity.setVisitDate(request.visitDate());
+                    entity.setTimeZone(ZONE.getId());
+                    entity.setAcceptedAt(acceptedAt.toString());
+                    entity.setCreatedAt(Instant.now().toString());
+
+                    if (mapper.insert(entity) != 1) {
+                        throw new IllegalStateException("预约写入失败");
+                    }
+
+                    finishAttempt(requestId, "CREATED", "");
+
+                    return new Decision(toResponse(entity), null);
+                })
+        );
+
+        // 必须等事务提交后再抛出拒绝异常，
+        // 否则刚保存的 REJECTED 结果会一起回滚。
+        if (decision.rejection() != null) {
+            throw new AppointmentRejectedException(
+                    decision.rejection()
+            );
+        }
+
+        return decision.response();
+    }
+
+    private Decision reject(String key, String reason) {
+        finishAttempt(key, "REJECTED", reason);
+        return new Decision(null, reason);
+    }
+
+    private void finishAttempt(
+            String key,
+            String status,
+            String reason) {
+
+        jdbc.update(
+                """
+                UPDATE demo_appointment_attempts
+                SET status = ?, reason = ?
+                WHERE request_id = ?
+                """,
+                status,
+                reason,
+                key
+        );
     }
 
     public AppointmentResponse findById(String appointmentId) {
-        String id = requireAppointmentId(appointmentId);
-
-        AppointmentEntity entity = mapper.selectById(id);
+        AppointmentEntity entity = mapper.selectById(
+                requireAppointmentId(appointmentId)
+        );
 
         if (entity == null) {
             throw notFound();
@@ -164,51 +320,63 @@ public class AppointmentService {
         }
 
         String id = requireAppointmentId(appointmentId);
+        AppointmentEntity original = mapper.selectById(id);
 
-        // SQL 条件更新保证只有首次取消会写入时间。
-        mapper.cancelIfActive(id, Instant.now().toString());
-
-        AppointmentEntity existing = mapper.selectById(id);
-
-        if (existing == null) {
+        if (original == null) {
             throw notFound();
         }
 
-        if ("DEMO_CANCELLED".equals(existing.getStatus())) {
-            return toResponse(existing);
-        }
+        return Objects.requireNonNull(
+                tx.execute(transaction -> {
 
-        throw new ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "当前预约状态不允许取消，请重新查询"
+                    // 与创建预约使用相同的排班锁。
+                    // 历史预约即使没有对应排班，也允许取消。
+                    mapper.lockCapacity(
+                            original.getHospitalId(),
+                            original.getDepartment(),
+                            original.getVisitDate()
+                    );
+
+                    mapper.cancelIfActive(
+                            id,
+                            Instant.now().toString()
+                    );
+
+                    AppointmentEntity saved = mapper.selectById(id);
+
+                    if (saved == null) {
+                        throw notFound();
+                    }
+
+                    if (!"DEMO_CANCELLED".equals(saved.getStatus())) {
+                        throw conflict("当前预约状态不允许取消");
+                    }
+
+                    // 通过有效预约数变化释放名额。
+                    // 重复取消不会再少一条，因此不会多返名额。
+                    return toResponse(saved);
+                })
         );
     }
 
     private AppointmentResponse reuseExisting(
             AppointmentEntity entity,
-            String requestId,
+            String key,
             CreateAppointmentRequest request) {
 
         if (request == null
-                || !Objects.equals(
-                entity.getRequestId(),
-                requestId
-        )
+                || !Objects.equals(entity.getRequestId(), key)
                 || !Objects.equals(
                 entity.getHospitalId(),
-                normalize(request.hospitalId())
-        )
+                normalize(request.hospitalId()))
                 || !Objects.equals(
                 entity.getDepartment(),
-                normalize(request.department())
-        )
+                normalize(request.department()))
                 || !Objects.equals(
                 entity.getVisitDate(),
-                request.visitDate()
-        )) {
+                request.visitDate())) {
 
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
+            throw conflict(
                     "同一个 Idempotency-Key 不能用于不同的预约内容"
             );
         }
@@ -221,13 +389,13 @@ public class AppointmentService {
             throw badRequest("Idempotency-Key 不能为空");
         }
 
-        String id = value.strip();
+        String key = value.strip();
 
-        if (id.length() > 128) {
+        if (key.length() > 128) {
             throw badRequest("Idempotency-Key 不能超过128个字符");
         }
 
-        return id;
+        return key;
     }
 
     private String requireAppointmentId(String value) {
@@ -238,9 +406,9 @@ public class AppointmentService {
         return value.strip();
     }
 
-    private String appointmentId(String requestId) {
+    private String appointmentId(String key) {
         return "DEMO-" + UUID.nameUUIDFromBytes(
-                ("demo-appointment:" + requestId)
+                ("demo-appointment:" + key)
                         .getBytes(StandardCharsets.UTF_8)
         );
     }
@@ -252,6 +420,13 @@ public class AppointmentService {
     private ResponseStatusException badRequest(String message) {
         return new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
+                message
+        );
+    }
+
+    private ResponseStatusException conflict(String message) {
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT,
                 message
         );
     }
@@ -276,5 +451,20 @@ public class AppointmentService {
                         : "仅创建本地演示预约记录，不代表真实医院挂号成功。",
                 entity.getCancelledAt()
         );
+    }
+
+    private record Attempt(
+            String hospitalId,
+            String department,
+            LocalDate visitDate,
+            String status,
+            String reason
+    ) {
+    }
+
+    private record Decision(
+            AppointmentResponse response,
+            String rejection
+    ) {
     }
 }
