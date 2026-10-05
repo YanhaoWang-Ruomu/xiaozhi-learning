@@ -176,6 +176,23 @@
             main { padding: 0 14px 30px; }
             .card { padding: 20px; }
         }
+
+        .schedule-panel { margin-top: 24px; }
+        .schedule-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+        .schedule-item { border: 1px solid #e1e9f3; border-radius: 14px; padding: 18px; }
+        .schedule-item-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+        .schedule-item h3 { margin: 0; font-size: 18px; }
+        .schedule-item button { width: 100%; }
+        .schedule-badge { font-size: 13px; border-radius: 8px; padding: 5px 8px; }
+        .schedule-badge.AVAILABLE { color: #166534; background: #dcfce7; }
+        .schedule-badge.NOT_RELEASED { color: #92400e; background: #fef3c7; }
+        .schedule-badge.FULL { color: #991b1b; background: #fee2e2; }
+        #scheduleStatus { min-height: 24px; color: #557aa5; }
+        #scheduleStatus.error { color: #b42318; }
+        @media (max-width: 700px) {
+            .schedule-grid { grid-template-columns: 1fr; }
+            .schedule-panel > .card-heading { align-items: flex-start; flex-wrap: wrap; }
+        }
     </style>
 </head>
 <body>
@@ -185,6 +202,20 @@
         当前支持：虚构医院 DEMO001 · 内科 · 上海时区。
         仅用于学习，不连接真实医院号源。
     </p>
+
+    <section class="card schedule-panel" aria-labelledby="scheduleTitle">
+        <div class="card-heading">
+            <h2 id="scheduleTitle">未来三天 · 演示排班</h2>
+            <button id="refreshSchedulesButton" type="button" class="secondary">刷新排班</button>
+        </div>
+        <p id="scheduleSummary" class="muted">排班状态待查询</p>
+        <p class="small muted">
+            所有日期和放号时间均按上海时区显示。选择日期只生成草稿，不占名额；
+            未放号可先准备草稿，预约仍需单独确认。页面可见且空闲时每分钟刷新。
+        </p>
+        <div id="scheduleItems" class="schedule-grid"></div>
+        <p id="scheduleStatus" role="status" aria-live="polite"></p>
+    </section>
 
     <div class="layout">
         <section class="card">
@@ -382,6 +413,7 @@
         $("confirmButton").disabled = busy || !canConfirm(currentDraft);
         $("cancelButton").disabled = busy || !canCancel(currentDraft);
         $("cancelAppointmentButton").disabled = busy || !canCancelAppointment(currentDraft);
+        updateScheduleControls();
     }
 
     function setBusy(value) {
@@ -617,9 +649,16 @@
         });
 
         if (!response.ok) {
-            throw new Error(
-                "请求失败，HTTP 状态码：" + response.status
-            );
+            let detail = "";
+            try {
+                const body = await response.json();
+                const value = body?.detail || body?.message;
+                if (typeof value === "string") detail = value.slice(0, 500);
+            } catch (_) {
+                // 非JSON错误响应只显示状态码。
+            }
+            throw new Error("请求失败，HTTP 状态码：" + response.status +
+                (detail ? "。" + detail : ""));
         }
 
         return response.json();
@@ -949,6 +988,7 @@
         }
 
         setBusy(true);
+        invalidateSchedules("预约状态正在变更，完成后将重新查询余号……");
 
         pendingOperation = isCancel
             ? "取消草稿请求"
@@ -1041,6 +1081,7 @@
             saveSession();
             showOperationNotice();
             setBusy(false);
+            void refreshSchedules();
         }
     }
 
@@ -1071,6 +1112,7 @@
         )) return;
 
         setBusy(true);
+        invalidateSchedules("预约状态正在变更，完成后将重新查询余号……");
         pendingOperation = "预约取消请求";
         pendingDraftId = draftId;
         saveSession();
@@ -1112,6 +1154,7 @@
             saveSession();
             showOperationNotice();
             setBusy(false);
+            void refreshSchedules();
         }
     }
 
@@ -1356,7 +1399,222 @@
         }
     }
 
+    // 排班只从服务端读取，不使用浏览器日期推算可预约窗口。
+    let scheduleData = null;
+    let scheduleLoading = false;
+    let scheduleLoadedAt = 0;
+    let scheduleSequence = 0;
+    let scheduleController = null;
+    const scheduleLabels = {
+        AVAILABLE: "可预约",
+        NOT_RELEASED: "尚未放号",
+        FULL: "已满额"
+    };
+
+    function schedulesFresh() {
+        return !!scheduleData && performance.now() - scheduleLoadedAt < 90000;
+    }
+
+    function updateScheduleControls() {
+        $("refreshSchedulesButton").disabled = busy || scheduleLoading;
+        for (const button of $("scheduleItems").querySelectorAll("button")) {
+            button.disabled = busy || scheduleLoading || !schedulesFresh() ||
+                button.dataset.bookingStatus === "FULL";
+        }
+    }
+
+    function setScheduleStatus(text, error = false) {
+        $("scheduleStatus").textContent = text;
+        $("scheduleStatus").classList.toggle("error", error);
+    }
+
+    function invalidateSchedules(message) {
+        scheduleSequence++;
+        scheduleController?.abort();
+        scheduleController = null;
+        scheduleData = null;
+        scheduleLoading = false;
+        $("scheduleItems").replaceChildren();
+        $("scheduleSummary").textContent = "排班状态待查询";
+        setScheduleStatus(message);
+        updateScheduleControls();
+    }
+
+    function isDateString(value) {
+        if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const time = Date.parse(value + "T00:00:00Z");
+        return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
+    }
+
+    function validateSchedules(data) {
+        if (!data || !["DEMO_DATA", "NO_DATA"].includes(data.status) ||
+            data.hospitalId !== "DEMO001" || data.department !== "内科" ||
+            data.timeZone !== "Asia/Shanghai" || data.capacityEnforced !== true ||
+            !isDateString(data.businessDate) || !Array.isArray(data.schedules) ||
+            data.schedules.length > 3 ||
+            (data.status === "NO_DATA" && data.schedules.length !== 0) ||
+            (data.status === "DEMO_DATA" && data.schedules.length === 0)) {
+            throw new Error("排班接口返回内容异常，请检查后端版本。");
+        }
+        const dates = new Set();
+        const base = Date.parse(data.businessDate + "T00:00:00Z");
+        for (const item of data.schedules) {
+            if (!item || !isDateString(item.visitDate)) throw new Error("排班日期异常。");
+            const offset = (Date.parse(item.visitDate + "T00:00:00Z") - base) / 86400000;
+            if (![1, 2, 3].includes(offset) || dates.has(item.visitDate) ||
+                !Number.isSafeInteger(item.totalCapacity) || item.totalCapacity < 0 ||
+                !Number.isSafeInteger(item.activeAppointmentCount) || item.activeAppointmentCount < 0 ||
+                !Number.isSafeInteger(item.referenceRemaining) || item.referenceRemaining < 0 ||
+                item.referenceRemaining !== Math.max(0, item.totalCapacity - item.activeAppointmentCount) ||
+                !Object.hasOwn(scheduleLabels, item.bookingStatus) ||
+                item.bookable !== (item.bookingStatus === "AVAILABLE") ||
+                (item.bookingStatus === "AVAILABLE" && item.referenceRemaining === 0) ||
+                (item.bookingStatus === "FULL" && item.referenceRemaining !== 0) ||
+                typeof item.releaseAt !== "string" || !Number.isFinite(Date.parse(item.releaseAt))) {
+                throw new Error("排班状态或名额数据异常，请刷新后重试。");
+            }
+            dates.add(item.visitDate);
+        }
+    }
+
+    function renderSchedules() {
+        $("scheduleItems").replaceChildren();
+        $("scheduleSummary").textContent =
+            "上海业务日期：" + scheduleData.businessDate + " · DEMO001 · 内科";
+        for (const item of [...scheduleData.schedules].sort((a, b) => a.visitDate.localeCompare(b.visitDate))) {
+            const card = document.createElement("article");
+            card.className = "schedule-item";
+            const heading = document.createElement("div");
+            heading.className = "schedule-item-heading";
+            const title = document.createElement("h3");
+            title.textContent = item.visitDate;
+            const badge = document.createElement("span");
+            badge.className = "schedule-badge " + item.bookingStatus;
+            badge.textContent = scheduleLabels[item.bookingStatus];
+            heading.append(title, badge);
+
+            const capacity = document.createElement("p");
+            capacity.textContent = "参考剩余 " + item.referenceRemaining +
+                " / 总名额 " + item.totalCapacity;
+            const release = document.createElement("p");
+            release.className = "small muted";
+            release.textContent = "上海时间 " + new Intl.DateTimeFormat("zh-CN", {
+                timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
+                hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+            }).format(new Date(item.releaseAt)) + " 放号";
+            const button = document.createElement("button");
+            button.type = "button";
+            button.dataset.bookingStatus = item.bookingStatus;
+            button.textContent = item.bookingStatus === "FULL" ? "已满额" :
+                item.bookingStatus === "NOT_RELEASED" ? "先准备待确认草稿" : "选择日期，生成草稿";
+            button.addEventListener("click", () => createScheduleDraft(item.visitDate));
+            card.append(heading, capacity, release, button);
+            $("scheduleItems").append(card);
+        }
+        setScheduleStatus(scheduleData.schedules.length
+            ? "已获取 " + scheduleData.schedules.length + " 天排班。查询不预留名额，确认时以后端校验为准。"
+            : "当前没有已配置的排班，请稍后点击刷新；没有数据不代表已满额。");
+        updateScheduleControls();
+    }
+
+    async function refreshSchedules() {
+        const sequence = ++scheduleSequence;
+        scheduleController?.abort();
+        const controller = new AbortController();
+        scheduleController = controller;
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        scheduleLoading = true;
+        scheduleData = null;
+        $("scheduleItems").replaceChildren();
+        $("scheduleSummary").textContent = "正在查询排班……";
+        setScheduleStatus("正在从后端获取排班状态……");
+        updateScheduleControls();
+        try {
+            const data = await request(
+                "/api/appointment/schedules?hospitalId=DEMO001&department=" + encodeURIComponent("内科"),
+                {signal: controller.signal}
+            );
+            if (sequence !== scheduleSequence) return;
+            validateSchedules(data);
+            scheduleData = data;
+            scheduleLoadedAt = performance.now();
+            renderSchedules();
+        } catch (error) {
+            if (sequence !== scheduleSequence) return;
+            scheduleData = null;
+            $("scheduleItems").replaceChildren();
+            $("scheduleSummary").textContent = "排班状态未核实";
+            setScheduleStatus("排班查询失败：" +
+                (error.name === "AbortError" ? "等待超时" : error.message) +
+                "。请点击刷新重试；聊天和已有草稿查询仍可使用。", true);
+        } finally {
+            clearTimeout(timeout);
+            if (sequence === scheduleSequence) {
+                scheduleLoading = false;
+                scheduleController = null;
+                updateScheduleControls();
+            }
+        }
+    }
+
+    async function createScheduleDraft(visitDate) {
+        if (busy || scheduleLoading) return;
+        if (!schedulesFresh()) {
+            await refreshSchedules();
+            setStatus("已尝试刷新排班，请核对最新结果后重新选择日期。");
+            return;
+        }
+        const item = scheduleData.schedules.find(value => value.visitDate === visitDate);
+        if (!item || item.bookingStatus === "FULL") return;
+        setBusy(true);
+        pendingOperation = "草稿创建请求";
+        pendingDraftId = null;
+        saveSession();
+        showOperationNotice();
+        setStatus("正在为 " + visitDate + " 生成草稿，尚未创建预约……");
+        try {
+            const draft = await request(
+                "/api/appointments/drafts?conversationId=" + encodeURIComponent(conversationId),
+                {method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({hospitalId: "DEMO001", department: "内科", visitDate})}
+            );
+            validateDraft(draft);
+            if (draft.hospitalId !== "DEMO001" || draft.department !== "内科" ||
+                draft.visitDate !== visitDate || draft.status !== "PENDING_CONFIRMATION") {
+                throw new Error("返回草稿与所选日期不一致，请同步核实。");
+            }
+            pendingOperation = "";
+            pendingDraftId = null;
+            displayDraft(draft);
+            setStatus(item.bookingStatus === "NOT_RELEASED"
+                ? "草稿已生成。该日期尚未放号，请到放号时间后再确认。"
+                : "草稿已生成，请核对右侧详情，再点击确认创建演示预约。");
+            $("draftDetails").scrollIntoView({behavior: "smooth", block: "center"});
+        } catch (error) {
+            setStatus("草稿创建结果尚未核实：" + error.message +
+                "。请先同步当前会话草稿，避免重复创建；本页不会自动重发请求。", true);
+        } finally {
+            saveSession();
+            showOperationNotice();
+            setBusy(false);
+            void refreshSchedules();
+        }
+    }
+
+    $("refreshSchedulesButton").addEventListener("click", () => {
+        if (!busy) void refreshSchedules();
+    });
+    setInterval(() => {
+        updateScheduleControls();
+        if (!document.hidden && !busy && !scheduleLoading) void refreshSchedules();
+    }, 60000);
+    document.addEventListener("visibilitychange", () => {
+        updateScheduleControls();
+        if (!document.hidden && !busy && !scheduleLoading) void refreshSchedules();
+    });
+
     restoreSession();
+    void refreshSchedules();
 </script>
 </body>
 </html>
