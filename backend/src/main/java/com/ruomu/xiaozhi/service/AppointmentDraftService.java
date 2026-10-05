@@ -199,9 +199,7 @@ public class AppointmentDraftService {
         }
 
         if ("CONFIRMED".equals(status)) {
-            return appointmentService.findById(
-                    draft.getString("appointmentId")
-            );
+            return requireActiveAppointment(draft.getString("appointmentId"));
         }
 
         if (!"CONFIRMING".equals(status)) {
@@ -270,6 +268,18 @@ public class AppointmentDraftService {
             }
         }
 
+        // 返回前重新查询，不能将已经取消的预约当作新创建成功。
+        return requireActiveAppointment(appointment.appointmentId());
+    }
+
+    private AppointmentResponse requireActiveAppointment(String appointmentId) {
+        AppointmentResponse appointment = appointmentService.findById(appointmentId);
+        if ("DEMO_CANCELLED".equals(appointment.status())) {
+            throw conflict("该演示预约已取消，不能通过再次确认原草稿恢复；如需预约请新建草稿");
+        }
+        if (!"DEMO_CREATED".equals(appointment.status())) {
+            throw conflict("预约状态异常，请重新查询");
+        }
         return appointment;
     }
 
@@ -415,6 +425,18 @@ public class AppointmentDraftService {
 
         String status = document.getString("status");
 
+        // 数据库草稿仍为 CONFIRMED，代表历史上已确认。
+        // 页面状态从关联预约实时推导，取消状态只在预约集合保存一份。
+        if ("CONFIRMED".equals(status)) {
+            AppointmentResponse appointment = appointmentService.findById(
+                    document.getString("appointmentId"));
+            if ("DEMO_CANCELLED".equals(appointment.status())) {
+                status = "APPOINTMENT_CANCELLED";
+            } else if (!"DEMO_CREATED".equals(appointment.status())) {
+                throw conflict("关联预约状态异常，请检查后台记录");
+            }
+        }
+
         String message = switch (status) {
 
             case "PENDING_CONFIRMATION" ->
@@ -425,6 +447,9 @@ public class AppointmentDraftService {
 
             case "CONFIRMED" ->
                     "已确认并创建本地演示预约，不代表真实医院挂号成功。";
+
+            case "APPOINTMENT_CANCELLED" ->
+                    "关联的演示预约已取消，草稿与预约记录均保留；不能再次确认恢复，请按需新建草稿。";
 
             case "CANCELLED" ->
                     "草稿已取消，不能再确认；如仍需预约，请重新创建草稿。";

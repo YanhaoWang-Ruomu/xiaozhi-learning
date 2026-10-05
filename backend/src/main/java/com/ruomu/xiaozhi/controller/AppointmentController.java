@@ -2,6 +2,7 @@ package com.ruomu.xiaozhi.controller;
 
 import com.ruomu.xiaozhi.dto.AppointmentDraftResponse;
 import com.ruomu.xiaozhi.dto.AppointmentResponse;
+import com.ruomu.xiaozhi.dto.CancelAppointmentRequest;
 import com.ruomu.xiaozhi.dto.CreateAppointmentRequest;
 import com.ruomu.xiaozhi.service.AppointmentDraftService;
 import com.ruomu.xiaozhi.service.AppointmentService;
@@ -77,6 +78,14 @@ public class AppointmentController {
             @PathVariable("draftId") String draftId) {
 
         return draftService.cancel(draftId);
+    }
+
+    @PostMapping("/{appointmentId}/cancel")
+    public AppointmentResponse cancelAppointment(
+            @PathVariable("appointmentId") String appointmentId,
+            @RequestBody CancelAppointmentRequest request) {
+        return appointmentService.cancel(appointmentId,
+                request != null && Boolean.TRUE.equals(request.confirmed()));
     }
 
     @GetMapping("/{appointmentId}")

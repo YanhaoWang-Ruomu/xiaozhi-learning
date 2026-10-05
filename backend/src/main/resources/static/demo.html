@@ -260,6 +260,9 @@
                 <button id="cancelButton" class="danger" type="button" disabled>
                     取消当前草稿
                 </button>
+                <button id="cancelAppointmentButton" class="danger" type="button" disabled>
+                    取消已确认的演示预约
+                </button>
             </div>
 
             <form id="draftForm">
@@ -295,7 +298,8 @@
         PENDING_CONFIRMATION: "待确认",
         CONFIRMING: "确认处理中",
         CONFIRMED: "已确认",
-        CANCELLED: "已取消"
+        APPOINTMENT_CANCELLED: "预约已取消",
+        CANCELLED: "草稿已取消"
     };
 
     function saveSession() {
@@ -329,8 +333,10 @@
     }
 
     function resolvePendingOperation(draft) {
-        if (draft.draftId === pendingDraftId &&
-            ["CONFIRMED", "CANCELLED"].includes(draft.status)) {
+        const resolved = pendingOperation === "预约取消请求"
+            ? draft.status === "APPOINTMENT_CANCELLED"
+            : ["CONFIRMED", "CANCELLED", "APPOINTMENT_CANCELLED"].includes(draft.status);
+        if (draft.draftId === pendingDraftId && resolved) {
             pendingOperation = "";
             pendingDraftId = null;
             showOperationNotice();
@@ -347,6 +353,11 @@
         return !!draft &&
             draft.status === "PENDING_CONFIRMATION" &&
             draft.appointmentId == null;
+    }
+
+    function canCancelAppointment(draft) {
+        return !!draft && draft.status === "CONFIRMED" &&
+            typeof draft.appointmentId === "string" && !!draft.appointmentId.trim();
     }
 
     function setStatus(text, error = false) {
@@ -370,6 +381,7 @@
         $("draftIdInput").disabled = busy;
         $("confirmButton").disabled = busy || !canConfirm(currentDraft);
         $("cancelButton").disabled = busy || !canCancel(currentDraft);
+        $("cancelAppointmentButton").disabled = busy || !canCancelAppointment(currentDraft);
     }
 
     function setBusy(value) {
@@ -458,7 +470,7 @@
             throw new Error("草稿数据格式异常。");
         }
 
-        if (draft.status === "CONFIRMED") {
+        if (["CONFIRMED", "APPOINTMENT_CANCELLED"].includes(draft.status)) {
             if (typeof draft.appointmentId !== "string" ||
                 !draft.appointmentId.trim()) {
                 throw new Error("已确认草稿缺少预约编号。");
@@ -511,6 +523,7 @@
         $("draftHint").textContent = hint;
         $("confirmButton").textContent = "确认创建演示预约";
         $("cancelButton").textContent = "取消当前草稿";
+        $("cancelAppointmentButton").textContent = "取消已确认的演示预约";
         $("confirmationNotice").textContent =
             "请先加载并核对草稿详情，再进行操作。";
         updateControls();
@@ -556,7 +569,12 @@
             CONFIRMED: {
                 hint: "当前草稿已确认。",
                 button: "已创建演示预约",
-                notice: "本地演示预约已创建，不代表真实医院挂号成功。当前不提供取消已创建预约的功能。"
+                notice: "本地演示预约已创建。需要取消时，核对预约编号后点击取消预约按钮，并在弹窗中再次确认。不涉及真实医院退号或退款。"
+            },
+            APPOINTMENT_CANCELLED: {
+                hint: "这份草稿关联的演示预约已取消。",
+                button: "预约已取消，不能再次确认",
+                notice: "草稿和预约记录均保留。原草稿不能恢复预约；如仍需预约，请按新的需求创建草稿。"
             },
             CANCELLED: {
                 hint: "当前草稿已取消。",
@@ -581,6 +599,9 @@
             ? "草稿已取消"
             : "取消当前草稿";
 
+        $("cancelAppointmentButton").textContent = draft.status === "APPOINTMENT_CANCELLED"
+            ? "演示预约已取消"
+            : "取消已确认的演示预约";
         $("confirmationNotice").textContent = presentation.notice;
 
         resolvePendingOperation(draft);
@@ -591,7 +612,8 @@
     async function request(url, options = {}) {
         const response = await fetch(url, {
             ...options,
-            cache: "no-store"
+            cache: "no-store",
+            signal: options.signal || AbortSignal.timeout(30000)
         });
 
         if (!response.ok) {
@@ -989,11 +1011,11 @@
 
                 const completed = isCancel
                     ? latest.status === "CANCELLED"
-                    : latest.status === "CONFIRMED";
+                    : ["CONFIRMED", "APPOINTMENT_CANCELLED"].includes(latest.status);
 
                 if (completed) {
                     setStatus(
-                        "操作响应未完整取得；已通过查询核实，当前草稿" +
+                        "已通过重新查询核实，当前状态：" +
                         draftStates[latest.status] + "。"
                     );
                 } else {
@@ -1031,6 +1053,69 @@
         "click",
         () => runDraftAction("cancel")
     );
+
+    async function runAppointmentCancellation() {
+        if (busy || !canCancelAppointment(currentDraft)) return;
+        const draft = currentDraft;
+        const draftId = draft.draftId;
+        const appointmentId = draft.appointmentId;
+
+        // 展示准确的目标编号；关闭或否定弹窗时不发送 POST。
+        if (!window.confirm(
+            "确定取消这笔已确认的演示预约吗？\n" +
+            "医院：" + draft.hospitalId + "\n" +
+            "科室：" + draft.department + "\n" +
+            "日期：" + draft.visitDate + "（" + draft.timeZone + "）\n" +
+            "预约编号：" + appointmentId + "\n\n" +
+            "取消后保留记录，不能通过原草稿恢复。仅操作本地演示数据。"
+        )) return;
+
+        setBusy(true);
+        pendingOperation = "预约取消请求";
+        pendingDraftId = draftId;
+        saveSession();
+        showOperationNotice();
+        setStatus("正在取消当前演示预约……");
+
+        try {
+            const result = await request(
+                "/api/appointments/" + encodeURIComponent(appointmentId) + "/cancel",
+                {method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({confirmed: true})}
+            );
+            if (result.appointmentId !== appointmentId || result.status !== "DEMO_CANCELLED") {
+                throw new Error("取消预约接口返回内容异常。");
+            }
+            const latest = await fetchDraft(draftId);
+            if (latest.appointmentId !== appointmentId || latest.status !== "APPOINTMENT_CANCELLED") {
+                throw new Error("取消结果与关联草稿查询结果不一致。");
+            }
+            displayDraft(latest);
+            setStatus("演示预约已取消，预约与草稿记录均保留。");
+        } catch (error) {
+            // 取消可能已经落库：仅通过 GET 核实，不自动重发 POST。
+            markUnverified(draftId);
+            try {
+                const latest = await fetchDraft(draftId);
+                displayDraft(latest);
+                if (latest.appointmentId === appointmentId && latest.status === "APPOINTMENT_CANCELLED") {
+                    setStatus("已通过查询核实：演示预约已取消，记录保留。");
+                } else {
+                    setStatus(error.message + " 当前状态：" + draftStates[latest.status] +
+                        "。请核对后再决定是否重试；请求不会自动重发。", true);
+                }
+            } catch (queryError) {
+                showUnavailable("取消结果尚未核实，请重新加载同一草稿或同步当前会话。");
+                setStatus(error.message + " 查询也未成功：" + queryError.message, true);
+            }
+        } finally {
+            saveSession();
+            showOperationNotice();
+            setBusy(false);
+        }
+    }
+
+    $("cancelAppointmentButton").addEventListener("click", runAppointmentCancellation);
 
     $("newChatButton").addEventListener("click", () => {
         if (busy) return;
