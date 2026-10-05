@@ -97,39 +97,60 @@ public class AppointmentSessionService {
 
         List<SessionItem> items = jdbc.query("""
                 SELECT s.session_id, s.visit_date, s.doctor_id, d.doctor_name,
-                       s.slot_id, t.slot_name, t.start_time, t.end_time, s.total_capacity
+                       s.slot_id, t.slot_name, t.start_time, t.end_time,
+                       s.total_capacity, ds.total_capacity AS daily_capacity,
+                       (SELECT COUNT(*) FROM demo_appointment_session_bookings b
+                        JOIN demo_appointments a ON a.appointment_id=b.appointment_id
+                        WHERE b.session_id=s.session_id AND a.status='DEMO_CREATED') AS active_count,
+                       (SELECT COUNT(*) FROM demo_appointments a
+                        WHERE a.hospital_id=s.hospital_id AND a.department=s.department
+                          AND a.visit_date=s.visit_date AND a.status='DEMO_CREATED') AS daily_active_count
                 FROM demo_appointment_sessions s
                 JOIN demo_appointment_doctors d
-                  ON d.hospital_id = s.hospital_id AND d.department = s.department
-                 AND d.doctor_id = s.doctor_id
+                  ON d.hospital_id=s.hospital_id AND d.department=s.department
+                 AND d.doctor_id=s.doctor_id
                 JOIN demo_appointment_time_slots t
-                  ON t.hospital_id = s.hospital_id AND t.department = s.department
-                 AND t.slot_id = s.slot_id
-                WHERE s.hospital_id = ? AND s.department = ?
+                  ON t.hospital_id=s.hospital_id AND t.department=s.department
+                 AND t.slot_id=s.slot_id
+                LEFT JOIN demo_appointment_schedules ds
+                  ON ds.hospital_id=s.hospital_id AND ds.department=s.department
+                 AND ds.visit_date=s.visit_date
+                WHERE s.hospital_id=? AND s.department=?
                   AND s.visit_date BETWEEN ? AND ?
-                  AND d.enabled = 1 AND t.enabled = 1
+                  AND d.enabled=1 AND t.enabled=1
                 ORDER BY s.visit_date, d.sort_order, s.doctor_id, t.sort_order, s.slot_id
                 """, (rs, rowNum) -> {
-            LocalDate date = rs.getDate("visit_date").toLocalDate();
-            return new SessionItem(
-                    rs.getString("session_id"), date,
-                    rs.getString("doctor_id"), rs.getString("doctor_name"),
-                    rs.getString("slot_id"), rs.getString("slot_name"),
-                    rs.getObject("start_time", LocalTime.class).format(TIME),
-                    rs.getObject("end_time", LocalTime.class).format(TIME),
-                    rs.getInt("total_capacity"),
-                    AppointmentBookingPolicy.releaseAt(date).toOffsetDateTime().toString(),
-                    AppointmentBookingPolicy.isReleased(date, now) ? "RELEASED" : "NOT_RELEASED");
-        }, id, dept, Date.valueOf(today.plusDays(1)),
+                    LocalDate date = rs.getDate("visit_date").toLocalDate();
+                    int capacity = rs.getInt("total_capacity");
+                    long active = rs.getLong("active_count");
+                    boolean dailyConfigured = rs.getObject("daily_capacity") != null;
+                    long sessionRemaining = Math.max(0L, capacity - active);
+                    long dailyRemaining = dailyConfigured
+                            ? Math.max(0L, rs.getInt("daily_capacity") - rs.getLong("daily_active_count")) : 0;
+                    long remaining = Math.min(sessionRemaining, dailyRemaining);
+                    boolean released = AppointmentBookingPolicy.isReleased(date, now);
+                    String bookingStatus = !dailyConfigured ? "NO_SCHEDULE"
+                            : !released ? "NOT_RELEASED" : remaining == 0 ? "FULL" : "AVAILABLE";
+                    return new SessionItem(
+                            rs.getString("session_id"), date,
+                            rs.getString("doctor_id"), rs.getString("doctor_name"),
+                            rs.getString("slot_id"), rs.getString("slot_name"),
+                            rs.getObject("start_time", LocalTime.class).format(TIME),
+                            rs.getObject("end_time", LocalTime.class).format(TIME), capacity,
+                            AppointmentBookingPolicy.releaseAt(date).toOffsetDateTime().toString(),
+                            released ? "RELEASED" : "NOT_RELEASED", active,
+                            sessionRemaining, dailyRemaining, remaining,
+                            bookingStatus, "AVAILABLE".equals(bookingStatus));
+                }, id, dept, Date.valueOf(today.plusDays(1)),
                 Date.valueOf(today.plusDays(AppointmentBookingPolicy.ADVANCE_DAYS)));
 
         return new AppointmentSessionResponse(
                 items.isEmpty() ? "NO_DATA" : "DEMO_DATA",
-                id, dept, today, AppointmentBookingPolicy.ZONE.getId(), false,
+                id, dept, today, AppointmentBookingPolicy.ZONE.getId(), true,
                 List.copyOf(items),
-                "仅为本地虚构演示排班配置，尚未接入按医生时段预约。"
-                + "totalCapacity是配置容量，不是剩余号源；RELEASED只表示已到计划放号时间。"
-                + "旧预约尚未分配医生时段，本接口不统计旧预约，也不预留名额。");
+                "仅为本地虚构演示排班。参考余量取场次余量与当天总余量的较小值。"
+                        + "旧预约未指定医生时段，但仍占用当天总名额。草稿不占号，确认时再次校验并占号。"
+                        + "查询不预留名额；未放号不能确认；取消后按有效预约记录自动重新计算余量。");
     }
 
     private String requireText(String value, String field) {

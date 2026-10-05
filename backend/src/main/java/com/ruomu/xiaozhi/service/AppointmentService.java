@@ -2,6 +2,7 @@ package com.ruomu.xiaozhi.service;
 
 import com.ruomu.xiaozhi.config.AppointmentStorageInitializer;
 import com.ruomu.xiaozhi.dto.AppointmentResponse;
+import com.ruomu.xiaozhi.dto.AppointmentSessionSelection;
 import com.ruomu.xiaozhi.dto.CreateAppointmentRequest;
 import com.ruomu.xiaozhi.entity.AppointmentEntity;
 import com.ruomu.xiaozhi.mapper.AppointmentMapper;
@@ -30,6 +31,7 @@ public class AppointmentService {
     private final AppointmentMapper mapper;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
+    private final AppointmentSessionBookingService sessionBooking;
 
     public AppointmentService(
             AppointmentMapper mapper,
@@ -38,6 +40,7 @@ public class AppointmentService {
 
         initializer.initialize();
         this.mapper = mapper;
+        this.sessionBooking = new AppointmentSessionBookingService(dataSource);
         this.jdbc = new JdbcTemplate(dataSource);
         this.tx = new TransactionTemplate(
                 new DataSourceTransactionManager(dataSource)
@@ -62,7 +65,7 @@ public class AppointmentService {
             CreateAppointmentRequest request,
             String key) {
 
-        return createAt(request, key, Instant.now());
+        return createAt(request, key, Instant.now(), null);
     }
 
     AppointmentResponse createForConfirmedDraft(
@@ -70,7 +73,16 @@ public class AppointmentService {
             String draftId,
             Instant acceptedAt) {
 
-        return createAt(request, "draft:" + draftId, acceptedAt);
+        return createAt(request, "draft:" + draftId, acceptedAt, null);
+    }
+
+    AppointmentResponse createForConfirmedDraft(CreateAppointmentRequest request,
+                                                String draftId, Instant acceptedAt, AppointmentSessionSelection expected) {
+        return createAt(request, "draft:" + draftId, acceptedAt, expected);
+    }
+
+    AppointmentSessionSelection sessionForDraft(CreateAppointmentRequest request) {
+        return sessionBooking.forDraft(request);
     }
 
     AppointmentResponse findExistingForDraft(
@@ -98,12 +110,13 @@ public class AppointmentService {
     private AppointmentResponse createAt(
             CreateAppointmentRequest request,
             String key,
-            Instant acceptedAt) {
+            Instant acceptedAt, AppointmentSessionSelection expected) {
 
         if (request == null) {
             throw badRequest("请求内容不能为空");
         }
 
+        String sessionId = sessionBooking.normalizeId(request.sessionId());
         String requestId = requireRequestId(key);
         String id = appointmentId(requestId);
 
@@ -168,6 +181,8 @@ public class AppointmentService {
                         );
                     }
 
+                    sessionBooking.bindTarget(requestId, sessionId);
+
                     AppointmentEntity saved = mapper.selectById(id);
 
                     if (saved != null) {
@@ -221,6 +236,12 @@ public class AppointmentService {
                         );
                     }
 
+                    // 同一日期总容量和场次容量同时生效，旧预约仍计入每日总量。
+                    var sessionDecision = sessionBooking.lockAndCheck(request, expected);
+                    if (sessionDecision.rejection() != null) {
+                        return reject(requestId, sessionDecision.rejection());
+                    }
+
                     AppointmentEntity entity = new AppointmentEntity();
                     entity.setAppointmentId(id);
                     entity.setRequestId(requestId);
@@ -236,6 +257,8 @@ public class AppointmentService {
                         throw new IllegalStateException("预约写入失败");
                     }
 
+                    // 预约、场次快照和确认结果必须在同一个MySQL事务内提交。
+                    sessionBooking.save(id, sessionDecision.selection());
                     finishAttempt(requestId, "CREATED", "");
                     return new Decision(toResponse(entity), null);
                 })
@@ -356,6 +379,11 @@ public class AppointmentService {
             );
         }
 
+        var savedSession = sessionBooking.find(entity.getAppointmentId());
+        String savedSessionId = savedSession == null ? null : savedSession.sessionId();
+        if (!Objects.equals(savedSessionId, sessionBooking.normalizeId(request.sessionId()))) {
+            throw conflict("同一个 Idempotency-Key 不能用于不同的预约场次");
+        }
         return toResponse(entity);
     }
 
@@ -426,7 +454,8 @@ public class AppointmentService {
                         + "不涉及真实医院退号或退款。"
                         : "仅创建本地演示预约记录，"
                         + "不代表真实医院挂号成功。",
-                entity.getCancelledAt()
+                entity.getCancelledAt(),
+                sessionBooking.find(entity.getAppointmentId())
         );
     }
 

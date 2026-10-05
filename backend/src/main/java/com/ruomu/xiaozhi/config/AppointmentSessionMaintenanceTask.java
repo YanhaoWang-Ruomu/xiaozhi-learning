@@ -41,7 +41,7 @@ public class AppointmentSessionMaintenanceTask implements ApplicationRunner {
         var result = sessionService.ensureUpcomingSessions();
         if (!result.equals(lastResult)) {
             log.info("DEMO_SESSION_CONFIG_READY businessDate={} from={} to={} "
-                            + "configuredSessions={} bookingEnabled=false",
+                            + "configuredSessions={} bookingEnabled=true",
                     result.businessDate(), result.fromDate(), result.toDate(),
                     result.configuredSessions());
             lastResult = result;

@@ -24,6 +24,12 @@ public record AppointmentSessionResponse(
             String endTime,
             int totalCapacity,
             String releaseAt,
-            String releaseStatus
+            String releaseStatus,
+            long activeAppointmentCount,
+            long sessionRemaining,
+            long dailyRemaining,
+            long referenceRemaining,
+            String bookingStatus,
+            boolean bookable
     ) {}
 }

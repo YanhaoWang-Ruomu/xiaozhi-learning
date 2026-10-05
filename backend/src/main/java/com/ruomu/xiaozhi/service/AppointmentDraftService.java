@@ -5,6 +5,7 @@ import com.mongodb.client.model.FindOneAndUpdateOptions;
 import com.mongodb.client.model.ReturnDocument;
 import com.ruomu.xiaozhi.dto.AppointmentDraftResponse;
 import com.ruomu.xiaozhi.dto.AppointmentResponse;
+import com.ruomu.xiaozhi.dto.AppointmentSessionSelection;
 import com.ruomu.xiaozhi.dto.CreateAppointmentRequest;
 import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -68,6 +69,7 @@ public class AppointmentDraftService {
                 Instant.now()
         );
 
+        var session = appointmentService.sessionForDraft(request);
         String hospitalId = normalize(request.hospitalId());
         String department = normalize(request.department());
         LocalDate visitDate = request.visitDate();
@@ -85,6 +87,15 @@ public class AppointmentDraftService {
             document.append("conversationId", conversationId);
         }
 
+        if (session != null) {
+            document.append("sessionId", session.sessionId())
+                    .append("doctorId", session.doctorId())
+                    .append("doctorName", session.doctorName())
+                    .append("slotId", session.slotId())
+                    .append("slotName", session.slotName())
+                    .append("startTime", session.startTime())
+                    .append("endTime", session.endTime());
+        }
         collection.insertOne(document);
         return toResponse(document);
     }
@@ -182,7 +193,8 @@ public class AppointmentDraftService {
             appointment = appointmentService.createForConfirmedDraft(
                     toRequest(draft),
                     id,
-                    Instant.parse(acceptedAtText)
+                    Instant.parse(acceptedAtText),
+                    toSession(draft)
             );
         } catch (AppointmentRejectedException exception) {
             // 只关闭已经在MySQL持久化拒绝的草稿。
@@ -310,7 +322,8 @@ public class AppointmentDraftService {
         return new CreateAppointmentRequest(
                 draft.getString("hospitalId"),
                 draft.getString("department"),
-                LocalDate.parse(draft.getString("visitDate"))
+                LocalDate.parse(draft.getString("visitDate")),
+                draft.getString("sessionId")
         );
     }
 
@@ -431,8 +444,17 @@ public class AppointmentDraftService {
                 LocalDate.parse(document.getString("visitDate")),
                 document.getString("timeZone"),
                 document.getString("appointmentId"),
-                message
+                message,
+                toSession(document)
         );
+    }
+
+    private AppointmentSessionSelection toSession(Document document) {
+        if (document.getString("sessionId") == null) return null;
+        return new AppointmentSessionSelection(document.getString("sessionId"),
+                document.getString("doctorId"), document.getString("doctorName"),
+                document.getString("slotId"), document.getString("slotName"),
+                document.getString("startTime"), document.getString("endTime"));
     }
 
     private String requireConversationId(String conversationId) {
