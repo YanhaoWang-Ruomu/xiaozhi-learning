@@ -1,5 +1,5 @@
 package com.ruomu.xiaozhi.dto;
 
-// 必须显式发送 {"confirmed": true}；缺失或 false 均不执行取消。
+// 必须明确发送 {"confirmed": true}，才允许执行取消预约。
 public record CancelAppointmentRequest(Boolean confirmed) {
 }

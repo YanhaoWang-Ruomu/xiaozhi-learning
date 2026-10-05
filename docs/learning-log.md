@@ -538,3 +538,19 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - 本次工具查询的两次模型调用总计 6910 Token。
 - 观察到部分调用耗时超过 60 秒，具体原因待后续排查。
 - 当前统计不包含向量化调用，也不等同于账号账单。
+
+## 2026-10-05：接入 MySQL 与 MyBatis-Plus
+
+- 安装 MySQL 8.4.11，配置 Windows 服务 MySQL84。
+- 创建 xiaozhi_learning 数据库和本机项目账号 xiaozhi_app。
+- 为项目账号授予项目数据库的 SELECT、INSERT、UPDATE、DELETE 权限。
+- 引入 MyBatis-Plus Spring Boot 3 Starter 3.5.7 和 MySQL JDBC 驱动。
+- 数据库密码通过 MYSQL_PASSWORD 环境变量传入。
+- 新增 DatabaseCheckMapper 和 MySqlConnectionVerifier，
+  启动时通过 Mapper 执行只读 SQL，检查数据库连接与 MyBatis-Plus 配置。
+- 补齐 CancelAppointmentRequest，修复取消预约请求类无法解析的编译错误。
+- 本机验证：控制台输出 MYSQL_CONNECTION_OK，
+  数据库、版本和项目账号均符合预期。
+- 聊天回归验证：页面正常显示回复，流式模型调用以 STOP 结束。
+- 本次模型调用耗时约 55.9 秒，响应速度问题待后续排查。
+- 当前仅完成 MySQL 接入，预约数据尚未迁移；聊天记忆仍使用 MongoDB。
