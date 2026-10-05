@@ -2,9 +2,11 @@ package com.ruomu.xiaozhi.tool;
 
 import com.ruomu.xiaozhi.dto.AppointmentDraftResponse;
 import com.ruomu.xiaozhi.dto.AppointmentRuleResponse;
+import com.ruomu.xiaozhi.dto.AppointmentScheduleResponse;
 import com.ruomu.xiaozhi.dto.CreateAppointmentRequest;
 import com.ruomu.xiaozhi.service.AppointmentDraftService;
 import com.ruomu.xiaozhi.service.AppointmentRuleService;
+import com.ruomu.xiaozhi.service.AppointmentScheduleService;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
@@ -20,13 +22,16 @@ public class AppointmentTools {
 
     private final AppointmentRuleService ruleService;
     private final AppointmentDraftService draftService;
+    private final AppointmentScheduleService scheduleService;
 
     public AppointmentTools(
             AppointmentRuleService ruleService,
-            AppointmentDraftService draftService) {
+            AppointmentDraftService draftService,
+            AppointmentScheduleService scheduleService) {
 
         this.ruleService = ruleService;
         this.draftService = draftService;
+        this.scheduleService = scheduleService;
     }
 
     @Tool("""
@@ -67,6 +72,32 @@ public class AppointmentTools {
     }
 
     @Tool("""
+            查询本地虚构医院未来三天的演示排班和参考剩余数量。
+            用户必须明确提供医院编号和科室；缺少时先询问，不擅自补全。
+            包括未知编号在内，都应依据工具结果回答，不自行猜测是否存在。
+            DEMO_DATA 仅代表本地演示数据，不是真实医院号源。
+            referenceRemaining 是总名额减去未取消预约数后的参考值。
+            capacityEnforced=false 表示系统尚未限制超额预约，不能承诺预约成功。
+            草稿不锁定名额；本工具不创建草稿，不确认或取消预约。
+            NO_DATA 表示没有配置排班，不等于满额或医院不存在。
+            返回空白或失败时不编造日期、名额和剩余数量。
+            """)
+    public AppointmentScheduleResponse queryAppointmentSchedules(
+            @P("用户明确提供的医院编号") String hospitalId,
+            @P("用户明确提供的科室") String department) {
+
+        AppointmentScheduleResponse response =
+                scheduleService.findSchedules(hospitalId, department);
+
+        System.out.println(
+                "[AppointmentTools] queryAppointmentSchedules 已执行，状态="
+                        + response.status()
+        );
+
+        return response;
+    }
+
+    @Tool("""
             创建待用户确认的本地演示预约草稿。
             仅当用户明确要求准备预约，并已明确提供医院编号、
             科室和具体预约日期时调用。
@@ -87,14 +118,18 @@ public class AppointmentTools {
             @ToolMemoryId String conversationId) {
 
         if (conversationId == null || conversationId.isBlank()) {
-            return invalidInput("当前请求缺少会话编号，请检查聊天接口配置。");
+            return invalidInput(
+                    "当前请求缺少会话编号，请检查聊天接口配置。"
+            );
         }
 
         if (hospitalId == null || hospitalId.isBlank()
                 || department == null || department.isBlank()
                 || visitDate == null || visitDate.isBlank()) {
 
-            return invalidInput("请明确提供医院编号、科室和具体预约日期。");
+            return invalidInput(
+                    "请明确提供医院编号、科室和具体预约日期。"
+            );
         }
 
         LocalDate date;
@@ -102,7 +137,9 @@ public class AppointmentTools {
         try {
             date = LocalDate.parse(visitDate.strip());
         } catch (DateTimeParseException exception) {
-            return invalidInput("预约日期格式不正确，请使用 yyyy-MM-dd。");
+            return invalidInput(
+                    "预约日期格式不正确，请使用 yyyy-MM-dd。"
+            );
         }
 
         try {
@@ -135,7 +172,9 @@ public class AppointmentTools {
             String reason = exception.getReason();
 
             return invalidInput(
-                    reason == null ? "预约参数不符合演示规则。" : reason
+                    reason == null
+                            ? "预约参数不符合演示规则。"
+                            : reason
             );
         }
     }
