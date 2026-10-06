@@ -37,7 +37,10 @@ public class AccountSecurityConfig {
     @Bean public SessionAuthenticationStrategy sessionAuthenticationStrategy(CsrfTokenRepository csrf) {
         return new CompositeSessionAuthenticationStrategy(List.of(new ChangeSessionIdAuthenticationStrategy(), new CsrfAuthenticationStrategy(csrf)));
     }
-    @Bean public SecurityFilterChain security(HttpSecurity http, SecurityContextRepository context, CsrfTokenRepository csrf) throws Exception {
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication(
+        type = org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication.Type.SERVLET)
+    public SecurityFilterChain security(HttpSecurity http, SecurityContextRepository context, CsrfTokenRepository csrf) throws Exception {
         http.securityContext(c -> c.requireExplicitSave(true).securityContextRepository(context))
             .csrf(c -> c.csrfTokenRepository(csrf))
             .requestCache(c -> c.disable())

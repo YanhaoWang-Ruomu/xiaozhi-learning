@@ -1,6 +1,6 @@
 # 真实 MySQL 预约测试
 
-2026-10-06 Windows 实测：新增16项预约数据库测试通过；连同33项原有离线测试、27项主项目流式测试和1项账号隔离测试，当前后端77项全部通过，0失败、0错误、0跳过，`mvn verify` 和打包成功。
+2026-10-06 Windows 实测：新增16项预约数据库测试通过；连同33项原有离线测试、27项主项目流式测试和1项账号隔离测试，再加本轮2项安全配置回归，当前后端79项全部通过，0失败、0错误、0跳过，`mvn verify` 和打包成功。
 
 ## 本机运行
 
@@ -18,7 +18,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql.ps1 -Ja
 预期看到：
 
 ```text
-Tests run: 77, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 79, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 TEST_LOGS=...
 MYSQL_TEST_RUNNER_EXIT=0
@@ -48,7 +48,7 @@ MYSQL_TEST_RUNNER_EXIT=0
 
 ## CI和失败排查
 
-GitHub 后端任务创建 Mongo 8.0 和 MySQL 8.4 临时服务，显式启用两个集成测试开关，并检查报告中账号1项、MySQL16项和主项目流式27项均未跳过。容器密码 `ci-test-only` 仅用于本轮临时服务，不是业务凭据。
+GitHub 后端任务创建 Mongo 8.0 和 MySQL 8.4 临时服务，显式启用两个集成测试开关，并检查报告中账号1项、MySQL16项和主项目流式27项及安全配置2项均未跳过。容器密码 `ci-test-only` 仅用于本轮临时服务，不是业务凭据。
 
 MySQL阶段提交975642f的5个云端任务已由截图验收（运行37450526301，4份报告，1分24秒）。加入27项流式测试后，本地完整77项通过；提交2319b5e的Actions运行37452460334已通过GitHub API核对，5个任务均成功。
 

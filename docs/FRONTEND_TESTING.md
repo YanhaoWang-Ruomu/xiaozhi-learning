@@ -50,5 +50,5 @@ check-report.mjs要求四组分别至少17/8/10/6项且全部passed，缺报告/
 本机完整日志位于F:\xiaozhi-learning-backups\frontend-phase4-20261006\final-check.log，原文件备份也在该目录。
 
 第四阶段留下的13项依赖告警已在后续修复中清零；重新npm ci后仍0项，41项测试与构建再次通过。
-CI新增包含开发依赖的审计检查并上传JSON。本次依赖修复云端待提交后验收，详见[DEPENDENCY_AUDIT.md](DEPENDENCY_AUDIT.md)。
-生产构建仍有大chunk提示；下一步验收本次CI，再做必要的真实浏览器链路验证，最后进入打包部署。
+CI新增包含开发依赖的审计检查并上传JSON。依赖修复提交cbe9c7c已完成云端验收，详见[DEPENDENCY_AUDIT.md](DEPENDENCY_AUDIT.md)。
+生产构建仍有大chunk提示；浏览器验收与新发现的离线迁移修复见[BROWSER_ACCEPTANCE.md](BROWSER_ACCEPTANCE.md)。账号、预约、刷新历史、等待阶段停止及可控部分流停止已复核。云模型存在耗时和ApiException波动，需继续处理；本轮修复提交后再验收CI，之后推进打包部署。
