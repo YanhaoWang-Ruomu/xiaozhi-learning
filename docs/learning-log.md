@@ -837,3 +837,14 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - Windows Maven最终验证：Tests run:12，Failures:0，Errors:0，Skipped:0；BUILD SUCCESS；FLUX_COMPARISON_OK mvc=PASS lifecycle=OFFLINE。
 - 验证边界：模型为手动回调替身，保存/占用释放为计数回调；无API Key、数据库或实际预约操作。未验证真实Qwen中止能力、浏览器TCP断线、慢客户端负载或数据库事务。详见示例README。
 - 决定：主项目继续保留SseEmitter。第10项三个独立示例完成；下一步进入第11项关键测试与CI。提交时只选择本次示例和文档，保留原有dependency.xml及backup/变更。
+
+
+## 2026-10-06：第11项第一阶段——默认测试与CI基础
+
+- 盘点发现主后端此前只有显式启用的AccountIsolationTest；旧预约main检查程序不由Maven自动发现，场次检查尚未适配账号会话/CSRF，不能直接作为CI门禁。
+- 新增AppointmentBookingPolicyTest（10项）、KnowledgeRetrievalAugmentorTest（6项）、KnowledgeSearchServiceTest（17项），覆盖固定日期边界、资料筛选、来源身份、异常检索、重复同步等。测试调用真实业务类，模型与Pinecone网络使用替身。
+- 开启原有真实Mongo临时库账号测试后，本机Windows执行mvn verify：34项，0失败、0错误、0跳过，BUILD SUCCESS并打包成功。没有访问业务MySQL或真实大模型。
+- 三个独立框架示例mvn verify均通过（5/7/12项）；Vue本机npm.cmd run build成功，仍有现有的大体积chunk提示，不影响构建结果。
+- 新增.github/workflows/ci.yml：后端Mongo服务容器测试、三个示例矩阵、Vue构建，共5个任务；显式检查账号测试报告，防止把跳过误当成功；无真实云端密钥和部署步骤。
+- 工作流经actionlint检查退出码0，所引用GitHub官方Actions版本文件可访问。GitHub首次实际运行尚待本次推送后验收，不能据本机通过宣称云端已通过。
+- 新增docs/CI_TESTING.md，记录覆盖矩阵、命令与验证边界。第11项尚未完成：下一阶段补真实MySQL事务/幂等/并发容量测试，再扩展主项目流式和前端回归。

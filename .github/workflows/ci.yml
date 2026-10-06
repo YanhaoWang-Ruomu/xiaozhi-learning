@@ -1,0 +1,105 @@
+name: Project checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend rules, sources and account isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mongo:
+        image: mongo:8.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Test and package backend (isolated Mongo test database, no cloud keys)
+        run: mvn -B -ntp -f backend/pom.xml -Dxiaozhi.auth.integration=true verify
+      - name: Ensure account integration test really ran
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          report = ET.parse('backend/target/surefire-reports/TEST-com.ruomu.xiaozhi.security.AccountIsolationTest.xml').getroot()
+          assert int(report.attrib['tests']) > 0, 'Account isolation test was not discovered'
+          for key in ('failures', 'errors', 'skipped'):
+              assert int(report.attrib.get(key, 0)) == 0, f'Account isolation test: {key} must be zero'
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+  framework-examples:
+    name: Example / ${{ matrix.example }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        example: [aiservice-comparison, pinecone-comparison, flux-comparison]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: examples/${{ matrix.example }}/pom.xml
+      - run: mvn -B -ntp -f examples/${{ matrix.example }}/pom.xml verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tests-${{ matrix.example }}
+          path: examples/${{ matrix.example }}/target/surefire-reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+  frontend-build:
+    name: Vue production build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: xiaozhi-ui
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: xiaozhi-ui/package-lock.json
+      - run: npm ci
+      - run: npm run build
