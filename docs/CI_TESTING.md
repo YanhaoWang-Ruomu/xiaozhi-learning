@@ -62,3 +62,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql.ps1 -Ja
 ## 2026-10-07 发布包检查补充
 
 提交f2a6980已由截图验收5任务、5报告、1分30秒。本轮前端任务增加release-ui JAR资源断言和Windows脚本语法解析，仍5任务及5份测试报告，待新提交云端验收。Windows发布构建重新执行Vue41项与后端71项（另17项数据库测试明确跳过），三个示例5/7/12项通过；不把跳过与上一阶段88项完整执行混为一谈。实际发布JAR由Edge完成10项检查，见PROJECT_REVIEW.md与RELEASE.md。
+
+
+## 2026-10-07 双库恢复演练补充
+
+发布包提交75174a6已截图验收5任务、5报告、1分34秒。本轮增加scripts/test-backup-restore.ps1的PowerShell解析和backup-restore-probe.mjs的Node语法检查，actionlint通过；任务和报告仍各5项，对应新提交尚待云端验收。
+
+双库恢复专项在Windows隔离实例执行：MySQL9表28行、Mongo5集合9文档的内容及结构/索引一致，恢复后的6组真实HTTP业务断言通过，清理成功。具体步骤、失败修复与边界见BACKUP_DRILL.md。不是新增6项JUnit测试，后端88项、前端41项与示例5/7/12项统计不变；本轮构建使用-DskipTests，没有冒充重跑完整套件。CI不下载Mongo工具或执行该Windows恢复演练。

@@ -144,11 +144,14 @@ jobs:
               assert any(n.startswith('BOOT-INF/classes/static/assets/') and n.endswith('.js') for n in names)
               assert 'BOOT-INF/classes/static/demo.html' not in names
           PY
-      - name: Parse Windows release scripts
+      - name: Check backup drill JavaScript syntax
+        working-directory: .
+        run: node --check scripts/backup-restore-probe.mjs
+      - name: Parse Windows release and backup scripts
         working-directory: .
         shell: pwsh
         run: |
-          foreach ($file in @('scripts/build-release.ps1', 'deploy/start.ps1')) {
+          foreach ($file in @('scripts/build-release.ps1', 'deploy/start.ps1', 'scripts/test-backup-restore.ps1')) {
             $tokens = $null
             $parseErrors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $file), [ref]$tokens, [ref]$parseErrors) | Out-Null

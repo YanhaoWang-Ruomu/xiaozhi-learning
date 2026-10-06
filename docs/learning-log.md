@@ -933,7 +933,7 @@ build() 创建模型客户端，chat() 才真正发送请求。
 
 ## 2026-10-07：全仓库检查与本机发布包
 
-- f2a6980已截图验收：5项CI成功、5份报告、1分30秒。按用户要求核对全项目文件与IDEA四个红色文件。
+- f2a6980已截图验收：5项CI成功、5份报告、1分30秒。
 - 建立164个受管文件和4个额外文件的哈希清单。四个红色文件是未跟踪的Git diff/清单输出，复制核验后归档到项目外；dependency.xml参考片段及其原修改保留。
 - 更新过时README/RUNBOOK（Vue入口、登录/CSRF、完整历史、取消已确认预约、MySQL连接命令），给ACCEPTANCE加历史提示，修正学习记录误删句。检查边界见PROJECT_REVIEW.md。
 - 新增release-ui Maven profile、Windows构建与前台启动脚本、外部配置、RELEASE及BACKUP_RESTORE说明；Vue与后端同一个JAR，只监听本机。启动不自动建表/迁移，缺少密码时隐藏输入。
@@ -942,3 +942,17 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - 发布包F:\xiaozhi-learning-releases\xiaozhi-20261007-023241-f2a6980，标识dirty=true；临时服务和数据目录清理，保留证据F:\xiaozhi-learning-backups\release-review-20261007。
 - CI增加JAR内Vue资源和PowerShell语法检查，仍5任务/5报告。本轮待提交及对应云端验收；没有自动commit/push。
 - 第12项第一阶段本机发布完成。Mongo备份工具尚未安装，双库恢复演练、服务器/HTTPS/代理/公开范围和后端依赖升级评估待后续，不能称整体部署完成。
+
+
+## 2026-10-07：双数据库备份与隔离恢复演练
+
+- 前一阶段提交75174a6已由截图验收：5个CI任务成功、5份报告、1分34秒。
+- 下载MongoDB Database Tools100.19.1 Windows ZIP，与官方release.json中的SHA-256核对一致后解压到项目外工具目录；没有修改系统PATH。旁文件.sha256返回403，改用官方元数据核验，不声称Windows签名通过。
+- 新增test-backup-restore.ps1、backup-restore-probe.mjs、BackupRestoreSnapshot.java：固定独立端口、新建GUID数据目录、合成账号/会话/三种草稿状态；不继承真实云密钥、不访问业务数据库。
+- mysqldump和mongodump配对导出，再恢复到全新独立实例。停写前后源快照与恢复快照一致：MySQL9表28行、Mongo5集合9文档，含列类型/字符集/约束、完整文档和保持键顺序的索引。
+- 演练发现并修复快照Map.of字段顺序误判、PowerShell把mysqladmin警告当错误导致清理中断；随后核对MySQL显式字符集的等价DDL差异，增加逐列语义哈希并保留原始DDL，未跳过结构检查。
+- 恢复后真实HTTP六组断言通过：原账号登录、中文历史和来源、草稿与预约关联、跨账号读取隔离、重复确认只扣一次、重复取消只释放一次。固定问答用真实历史/记忆服务写入，没有模型请求。
+- 最终证据F:\xiaozhi-learning-backups\backup-drill-92d3f5ec784b4a51bd37d163df6af71b；result.json的passed/cleanupOK均true。六个隔离端口释放，四个数据库目录及测试密码fixture删除；业务MySQL3306/Mongo27017原进程未变。
+- CI只增加新脚本语法检查，不把本机恢复称为云端执行。PowerShell/Node语法及actionlint通过；本轮不改变业务源码，构建-DskipTests不计入新测试数量，原后端88/前端41/示例5、7、12项统计不变。
+- 新增BACKUP_DRILL.md并更新备份、发布、CI、路线和README。原dependency.xml修改保留，不纳入本轮提交。尚未commit/push，待对应云端验收。
+- 第12项第二阶段的合成数据恢复已通过；没有备份或覆盖现有业务库。目标服务器、开放范围、HTTPS/代理/SSE及后端依赖评估仍待完成，迁移前另做业务备份和恢复验收。

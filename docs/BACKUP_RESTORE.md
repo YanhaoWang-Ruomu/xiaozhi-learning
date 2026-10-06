@@ -5,9 +5,9 @@
 ## 前提与边界
 
 - 先停止所有访问这对数据库的应用实例及排班定时任务，确认没有聊天、预约、同步或其他写入；数据库服务本身保持运行。单机Mongo不是副本集，不能用--oplog假装跨库一致快照。
-- 用mysqldump和MongoDB Database Tools的mongodump导出。MySQL工具已在本机安装；本轮路径检查未发现mongodump/mongorestore，需安装官方Database Tools后再执行Mongo步骤。
+- 用mysqldump和MongoDB Database Tools的mongodump导出。MySQL工具已安装；MongoDB Database Tools 100.19.1已按官方发布元数据校验并解压，具体路径与校验记录见BACKUP_DRILL.md。
 - 官方说明：https://www.mongodb.com/docs/database-tools/installation/installation-windows/ 和 https://www.mongodb.com/docs/database-tools/mongodump/ 。
-- 以下是待演练的操作说明，本轮没有导出或覆盖业务库。工具退出0和文件存在只是导出完成，还需在独立实例恢复、核对数量/关联及登录和预约流程才能标记备份可用。
+- 隔离合成数据的双库恢复演练已通过，见[BACKUP_DRILL.md](BACKUP_DRILL.md)。以下业务备份操作尚未对当前业务库执行，本轮没有导出或覆盖业务库。工具退出0和文件存在只是导出完成，还需在独立实例恢复、核对数量/关联及登录和预约流程才能标记备份可用。
 - 备份包含账号密码哈希与聊天内容，应保存在私有目录及另一份受控存储，不上传GitHub。
 
 ## 导出（停写期间）
@@ -29,7 +29,7 @@ if ($LASTEXITCODE -ne 0) { throw 'MySQL export failed; do not mark this backup c
 Mongo：将下面路径换成实际安装的Database Tools目录。命令适用于当前本机未启用认证的连接；不要将带密码的URI粘贴到聊天或提交到仓库。
 
 ~~~powershell
-$mongoTools = 'C:\Program Files\MongoDB\Tools\100\bin'
+$mongoTools = 'F:\xiaozhi-medical\tools\mongodb-database-tools-100.19.1\mongodb-database-tools-windows-x86_64-100.19.1\bin'
 & "$mongoTools\mongodump.exe" --uri='mongodb://127.0.0.1:27017' --db=xiaozhi_learning "--archive=$backupDir\mongo.archive.gz" --gzip
 if ($LASTEXITCODE -ne 0) { throw 'Mongo export failed; paired backup is incomplete' }
 Get-FileHash "$backupDir\mysql.sql","$backupDir\mongo.archive.gz" -Algorithm SHA256 | Format-List
