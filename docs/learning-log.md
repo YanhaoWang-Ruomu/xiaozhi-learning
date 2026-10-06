@@ -917,3 +917,15 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - 云模型真实调用约9秒、158秒成功；另有约132秒、269秒后ApiException。原因待排查；第11项尚未整体结束，不进入部署。记录详见docs/BROWSER_ACCEPTANCE.md。
 - 临时进程、测试数据库目录、临时密码与会话凭据已清理；证据保留在F:\xiaozhi-learning-backups\browser-check-20261006。保留已有dependency.xml、backup/、未跟踪文件和学习记录中用户原有修改。
 - 本轮尚未提交推送；下一步先验收对应提交CI，再处理模型波动及真实部分输出停止，随后推进第12项。
+
+
+## 2026-10-07：模型网络诊断与真实部分输出停止
+
+- 前一轮提交bf3cee0由用户截图验收：5个CI任务成功、5份报告、1分16秒。
+- 核对实际SDK2.18.5源码，默认连接120秒、写入60秒、读取300秒；显式设置项目10/60/20秒（连接/读取空闲/写入），在客户端初始化前应用。读取空闲超时不是请求总时限，也不会加快模型生成；全局同时影响DashScope嵌入，修改需重启。
+- TokenUsageListener增加白名单错误码、受限HTTP状态与请求ID、底层异常类型，不输出message、响应正文或密钥。新增9项回归，包含实际SDK读取本机停滞HTTP流的1秒超时；发现SDK在HTTP200后以response_error报告流失败，不能用HTTP200判定成功。
+- 两次真实小请求完成约3.4/2.0秒；主项目一次模型调用4.8秒。未复现旧长耗时ApiException，根因仍不确定，不把配置改动称为网络波动根治。
+- 真实Edge/主项目/云模型：6.796秒显示首段，6.829秒停止接收，9.745秒会话可用；两条历史complete，刷新无重发、仅1次POST、无pageerror。后台仍完成并保存全文，不代表模型生成或计费被取消。
+- 完整后端88项全部通过，0失败/错误/跳过，verify及打包成功；CI增加3/5/1项报告门禁，actionlint通过。前端源码未改，未重复运行已通过的41项。
+- 日志与脚本保留在F:\xiaozhi-learning-backups\model-diagnostics-20261007；临时MySQL/Mongo/前后端及数据目录清理，业务3306/27017不动。保留原dependency.xml和未跟踪文件。
+- 新增MODEL_DIAGNOSTICS.md，更新CI_TESTING、MYSQL_TESTING、BROWSER_ACCEPTANCE和roadmap。本轮尚未提交推送，等待对应CI验收后推进第12项；物理断网、代理、HTTPS、压力与云端取消仍按实际边界记录。

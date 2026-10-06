@@ -65,16 +65,19 @@ public final class TokenUsageListener implements ChatModelListener {
     @Override
     public void onError(ChatModelErrorContext context) {
         // 失败不代表零消耗；没有最终用量时明确记为 UNKNOWN。
-        // 只记录异常类型，不输出可能含请求正文或凭据的异常消息。
+        // 仅记录经过限制的状态信息，不输出异常消息、响应正文或凭据。
+        ModelErrorSummary detail = ModelErrorSummary.from(context.error());
         log.warn(
                 "TOKEN_USAGE callId={} mode={} model={} outcome=ERROR "
                         + "inputTokens=UNKNOWN outputTokens=UNKNOWN "
-                        + "totalTokens=UNKNOWN durationMs={} errorType={}",
+                        + "totalTokens=UNKNOWN durationMs={} errorType={} "
+                        + "httpStatus={} serviceCode={} requestId={} causeType={}",
                 callId(context.attributes()),
                 mode,
                 modelName,
                 durationMs(context.attributes()),
-                context.error().getClass().getSimpleName()
+                context.error().getClass().getSimpleName(),
+                detail.httpStatus(), detail.serviceCode(), detail.requestId(), detail.causeType()
         );
     }
 

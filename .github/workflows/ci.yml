@@ -61,7 +61,9 @@ jobs:
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
           suites = [('security.AccountIsolationTest', 1), ('service.AppointmentMySqlIntegrationTest', 16),
-                    ('controller.ChatControllerStreamTest', 27), ('security.AccountSecurityConfigTest', 2)]
+                    ('controller.ChatControllerStreamTest', 27), ('security.AccountSecurityConfigTest', 2),
+                    ('config.DashScopeNetworkConfigTest', 3), ('config.ModelErrorSummaryTest', 5),
+                    ('config.DashScopeIdleTimeoutTest', 1)]
           for suite, minimum in suites:
               report = ET.parse(f'backend/target/surefire-reports/TEST-com.ruomu.xiaozhi.{suite}.xml').getroot()
               assert int(report.attrib['tests']) >= minimum, f'{suite}: tests missing'
