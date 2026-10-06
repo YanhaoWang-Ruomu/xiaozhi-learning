@@ -39,5 +39,6 @@
 
 - @AiService对照：独立示例 examples/aiservice-comparison 已实现；5项测试和命令行演示在Windows通过，主项目继续使用手动装配。
 - LangChain4j Pinecone集成对照：examples/pinecone-comparison离线契约示例完成，真实适配器的7项测试通过。SDK网络边界使用替身，尚未进行真实云端端到端验证或主项目迁移。
-- Flux流式输出对照：待完成。
-- 本次同步装配实验不等于已迁移主项目全部RAG、流式和账号权限逻辑。
+- Flux流式输出对照：examples/flux-comparison已完成，Windows下12项离线测试通过。覆盖真实beta3适配器、MVC事件序列化、错误/保存失败、LENGTH截断、超时及订阅取消后的终态处理。主项目继续使用SseEmitter。
+- 第10项的三个独立对照示例均已完成；这不等于迁移主项目全部RAG、流式和账号权限逻辑，也不代表真实云端和浏览器断网端到端验证完成。
+- 下一步：第11项，盘点并补齐主项目关键自动化测试，配置持续集成。

@@ -825,3 +825,15 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - 不读取云端凭据、不调用真实模型、不连接云索引。测试向量为1024维合成数据；这不是云端连通性、真实语义检索或服务端隔离的验收。
 - 主项目继续使用现有REST客户端；真实迁移仍需补齐同步状态、fetch核验、错误处理和独立namespace云端验收。
 - 下一小步：Flux流式输出对照。运行步骤与差异表见examples/pinecone-comparison/README.md。
+
+
+## 2026-10-06：Flux 与 SseEmitter 独立对照
+
+- 新增 `examples/flux-comparison`，固定 Java 17、Spring Boot 3.2.6、LangChain4j 1.0.0-beta3；Reactor 由 Boot 管理（本次解析为3.6.6）。主项目代码未因示例而改动。
+- 阅读并测试真实 `TokenStreamToFluxAdapter`：beta3在adapt时就启动，只输出partial文字，单订阅；来源和最终完整回复不会自动变成Flux元素。
+- 编写显式SSE事件桥接，保留status/token/sources/done/failed思路；保存成功后才发送done，LENGTH截断和保存失败不伪装成功。演示没有预约工具，drafts为空。
+- 使用虚拟时间验证Flux.timeout是元素间隔超时；使用订阅取消验证传输结束不等于模型停止，取消后真实完成仍保存且只释放一次。不能把doFinally(CANCEL)当作工具停止或回滚。
+- 使用Spring MVC MockMvc比较Flux与SseEmitter的命名事件和JSON，配置有界异步线程池。没有引入WebFlux starter或替换主项目控制器。
+- Windows Maven最终验证：Tests run:12，Failures:0，Errors:0，Skipped:0；BUILD SUCCESS；FLUX_COMPARISON_OK mvc=PASS lifecycle=OFFLINE。
+- 验证边界：模型为手动回调替身，保存/占用释放为计数回调；无API Key、数据库或实际预约操作。未验证真实Qwen中止能力、浏览器TCP断线、慢客户端负载或数据库事务。详见示例README。
+- 决定：主项目继续保留SseEmitter。第10项三个独立示例完成；下一步进入第11项关键测试与CI。提交时只选择本次示例和文档，保留原有dependency.xml及backup/变更。
