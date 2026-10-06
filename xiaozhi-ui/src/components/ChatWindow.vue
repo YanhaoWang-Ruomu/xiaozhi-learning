@@ -239,7 +239,7 @@ onBeforeUnmount(() => {
       <details class="session-info">
         <summary>当前会话编号</summary>
         <p class="identifier">{{ conversationId }}</p>
-        <p class="muted">聊天历史保存在服务端，与模型记忆窗口分开。历史仅限当前浏览器访问密钥；清除浏览器站点数据会失去访问。正式登录尚未接入。</p>
+        <p class="muted">聊天历史保存在服务端，与模型记忆窗口分开。登录后可查看当前账号的会话；清除浏览器站点数据后，需要重新登录。</p>
       </details>
       <p v-if="storageNotice" class="warning" role="alert">{{ storageNotice }}</p>
     </aside>

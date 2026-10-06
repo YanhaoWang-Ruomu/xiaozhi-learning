@@ -8,6 +8,8 @@ target/
 node_modules/
 dist/
 coverage/
+/xiaozhi-ui/test-results/
+/xiaozhi-ui/.vitest/
 
 # IDE and operating system
 .idea/

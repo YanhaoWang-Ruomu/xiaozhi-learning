@@ -880,3 +880,16 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - Windows定向测试27项全部通过；临时MySQL脚本执行完整后端77项，0失败、0错误、0跳过，BUILD SUCCESS，MYSQL_TEST_RUNNER_EXIT=0。实际日志：xiaozhi-learning-backups/xiaozhi-mysql-test-499fd8aee06f42ceaac8232bd3515c93。
 - CI增加流式测试至少27项且不得失败/错误/跳过的报告门禁，actionlint通过。新增STREAM_TESTING.md，更新CI_TESTING、MYSQL_TESTING和roadmap；本次云端执行待推送后验收。
 - 边界：模型、草稿和历史存储在本组中使用替身；没有真实TCP断网、浏览器、云模型取消或反向代理验证。完整账号权限和真实数据库由已有测试分别承担；第11项下一步为前端关键交互回归。
+
+
+## 2026-10-06：第三阶段云端核对与第四阶段前端回归
+
+- 交接文字仍写第三阶段待提交，但实际仓库HEAD和origin/main均为2319b5e。两份流式测试文件哈希与已验证版本一致，本机Surefire报告77项、0失败/错误/跳过；GitHub API确认运行37452460334及5个任务全部成功。
+- 新增Vue前端41项：SSE解析17、ChatWindow交互8、AppointmentPanel人工确认及待核实流程10、账号界面6。测试真实组件和DOM事件，API/网络边界使用替身；不请求真实模型、不操作业务数据库。
+- 首轮修正测试夹具的括号及beforeEach误返回mock问题。最终npm ci → npm run test:ci → npm run build全部退出0；41 passed，FRONTEND_REPORT_OK tests=41 suites=4；actionlint和git diff --check通过。
+- 初选Vitest3的审计提示已知问题，改为Vitest5.0.3、Vite6.4.3和plugin-vue5.2.4，保留Node24并锁定依赖。新增Vue Test Utils2.4.6和jsdom26.1.0。
+- CI前端任务增加测试、四组数量/结果门禁以及JUnit/JSON报告上传；工作流仍5个任务，预计5份报告。第四阶段尚未提交推送，不能把本机通过当成本次云端通过。
+- 修正ChatWindow过时的“正式登录尚未接入”说明。没有改后端实现、预约规则、数据库及原有dependency.xml和backup/。
+- npm audit对原锁文件为15项、最终为13项（3 moderate/9 high/1 critical），剩余包均在原依赖树，包括form-data等；本轮未引入剩余告警中的新包，也未执行强制批量修复。下一步专门处理旧依赖再进行部署验收。
+- jsdom并不代表真实浏览器TCP断网、Cookie/CSRF、代理、设备输入法或云模型取消已验证。原有后端77项本轮核对报告和云端结果，没有因前端改动重复运行。
+- 备份与验证日志：F:\xiaozhi-learning-backups\frontend-phase4-20261006。后续先提交并验收本次CI，再补依赖修复及必要的浏览器链路检查；第11项尚未整体结束，第12项尚未开始。
