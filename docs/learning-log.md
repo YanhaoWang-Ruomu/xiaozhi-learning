@@ -868,3 +868,15 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - CI后端加入MySQL8.4服务及报告检查，账号1项和MySQL16项均不得跳过；actionlint通过。本次新工作流云端执行待推送后验收，不以本机通过替代云端结果。
 - 更新CI_TESTING、roadmap，新增MYSQL_TESTING运行说明。8线程受控测试不是压力性能保证，触发器异常不是实际网络中断；首次草稿抢占、迁移和完整浏览器链路不在本测试范围。
 - 本轮不改业务实现，不提交推送；保留原有dependency.xml、backup/及学习记录中的已有修改。下一步在云端验收后补主项目流式和前端回归，第11项尚未整体完成。
+
+
+## 2026-10-06：第11项第三阶段——主项目流式聊天回归
+
+- 前一阶段提交975642f已推送，用户截图确认Actions运行37450526301：5个任务全部成功、4份报告、总耗时1分24秒，MySQL阶段云端验收完成。
+- 新增ChatControllerStreamTest和ControlledChatStream，直接测试主项目ChatController及Spring MVC/SseEmitter序列化，共27项场景。覆盖正常事件顺序、最终完整回复、来源过滤、草稿ID回查与去重、错误工具结果、保存失败、模型错误/截断、身份/参数校验、任务拒绝和占用释放。
+- 并发验证：同步/流式共享会话409保护；8线程同会话只启动1轮；全局8轮限制、第9轮429；重复完成/错误不增加许可；完成与错误竞争只有一个终态；保存结束前不能重复发送。
+- Servlet回调模拟error/completion/timeout，验证断线后占用保留直到真实模型终态，完成仍先保存，失败再标记中断；排队/准备阶段断开不会启动TokenStream。
+- 首轮调整了测试夹具中的泛型断言和MVC响应头检查时机，补齐字符串/JSON转换器；未发现需要修改业务实现的问题。
+- Windows定向测试27项全部通过；临时MySQL脚本执行完整后端77项，0失败、0错误、0跳过，BUILD SUCCESS，MYSQL_TEST_RUNNER_EXIT=0。实际日志：xiaozhi-learning-backups/xiaozhi-mysql-test-499fd8aee06f42ceaac8232bd3515c93。
+- CI增加流式测试至少27项且不得失败/错误/跳过的报告门禁，actionlint通过。新增STREAM_TESTING.md，更新CI_TESTING、MYSQL_TESTING和roadmap；本次云端执行待推送后验收。
+- 边界：模型、草稿和历史存储在本组中使用替身；没有真实TCP断网、浏览器、云模型取消或反向代理验证。完整账号权限和真实数据库由已有测试分别承担；第11项下一步为前端关键交互回归。

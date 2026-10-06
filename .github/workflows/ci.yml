@@ -56,11 +56,12 @@ jobs:
           cache-dependency-path: backend/pom.xml
       - name: Test and package backend (isolated MySQL and Mongo, no cloud keys)
         run: mvn -B -ntp -f backend/pom.xml -Dxiaozhi.auth.integration=true -Dxiaozhi.mysql.integration=true verify
-      - name: Ensure both database integration suites really ran
+      - name: Ensure database and main streaming suites really ran
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
-          suites = [('security.AccountIsolationTest', 1), ('service.AppointmentMySqlIntegrationTest', 16)]
+          suites = [('security.AccountIsolationTest', 1), ('service.AppointmentMySqlIntegrationTest', 16),
+                    ('controller.ChatControllerStreamTest', 27)]
           for suite, minimum in suites:
               report = ET.parse(f'backend/target/surefire-reports/TEST-com.ruomu.xiaozhi.{suite}.xml').getroot()
               assert int(report.attrib['tests']) >= minimum, f'{suite}: tests missing'

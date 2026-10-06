@@ -1,6 +1,6 @@
 # 真实 MySQL 预约测试
 
-2026-10-06 Windows 实测：新增16项预约数据库测试通过；连同33项离线测试和1项账号隔离测试，后端50项全部通过，0失败、0错误、0跳过，`mvn verify` 和打包成功。
+2026-10-06 Windows 实测：新增16项预约数据库测试通过；连同33项原有离线测试、27项主项目流式测试和1项账号隔离测试，当前后端77项全部通过，0失败、0错误、0跳过，`mvn verify` 和打包成功。
 
 ## 本机运行
 
@@ -18,7 +18,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql.ps1 -Ja
 预期看到：
 
 ```text
-Tests run: 50, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 77, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 TEST_LOGS=...
 MYSQL_TEST_RUNNER_EXIT=0
@@ -48,8 +48,8 @@ MYSQL_TEST_RUNNER_EXIT=0
 
 ## CI和失败排查
 
-GitHub 后端任务创建 Mongo 8.0 和 MySQL 8.4 临时服务，显式启用两个集成测试开关，并检查报告中账号1项、MySQL16项均未跳过。容器密码 `ci-test-only` 仅用于本轮临时服务，不是业务凭据。
+GitHub 后端任务创建 Mongo 8.0 和 MySQL 8.4 临时服务，显式启用两个集成测试开关，并检查报告中账号1项、MySQL16项和主项目流式27项均未跳过。容器密码 `ci-test-only` 仅用于本轮临时服务，不是业务凭据。
 
-本次本地50项已通过；新增 MySQL 的云端运行仍需推送后查看。此前提交77383fe的5个云端任务和报告上传已验收，不代表本次新工作流已执行。
+MySQL阶段提交975642f的5个云端任务已由截图验收（运行37450526301，4份报告，1分24秒）。加入27项流式测试后，本地完整77项已通过；本次新增门禁的云端结果待推送后确认。
 
 失败时查看 `TEST_LOGS` 指向目录中的 `maven.log`、`initialize.*.log`、`server.stderr.log` 和 `shutdown.*.log`。Mongo未运行、13307已被占用或依赖缺失应报错，不能把跳过当成功。强制关机/终止进程可能留下临时文件或数据库；先核对本次日志中的完整路径和进程，勿按库名前缀批量删除，也勿停止业务 MySQL84。
