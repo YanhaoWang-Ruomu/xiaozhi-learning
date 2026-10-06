@@ -57,3 +57,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql.ps1 -Ja
 ## 后续
 
 第11项第三阶段主项目流式与完整后端已完成本机及云端验收，见[STREAM_TESTING.md](STREAM_TESTING.md)。第四阶段前端41项本机及云端已验收，运行步骤与边界见[FRONTEND_TESTING.md](FRONTEND_TESTING.md)。依赖审计13项已修复为0，回归通过，CI审计门禁已通过提交cbe9c7c的云端验收，详见[DEPENDENCY_AUDIT.md](DEPENDENCY_AUDIT.md)。浏览器账号、预约、历史及停止接收已分步骤复核，详见[BROWSER_ACCEPTANCE.md](BROWSER_ACCEPTANCE.md)。安全配置修复提交bf3cee0已截图验收：5任务、5报告、1分16秒。本轮新增网络超时配置、安全错误摘要及9项回归，完整88项本机通过，真实云模型部分输出后停止/收尾/刷新通过，详见[MODEL_DIAGNOSTICS.md](MODEL_DIAGNOSTICS.md)。历史ApiException根因仍未确定；本轮待提交及云端验收。物理断网、生产代理、HTTPS和多节点压力不在已验收范围，第12项打包部署尚未开始。
+
+
+## 2026-10-07 发布包检查补充
+
+提交f2a6980已由截图验收5任务、5报告、1分30秒。本轮前端任务增加release-ui JAR资源断言和Windows脚本语法解析，仍5任务及5份测试报告，待新提交云端验收。Windows发布构建重新执行Vue41项与后端71项（另17项数据库测试明确跳过），三个示例5/7/12项通过；不把跳过与上一阶段88项完整执行混为一谈。实际发布JAR由Edge完成10项检查，见PROJECT_REVIEW.md与RELEASE.md。

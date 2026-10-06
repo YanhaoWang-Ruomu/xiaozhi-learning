@@ -929,3 +929,16 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - 完整后端88项全部通过，0失败/错误/跳过，verify及打包成功；CI增加3/5/1项报告门禁，actionlint通过。前端源码未改，未重复运行已通过的41项。
 - 日志与脚本保留在F:\xiaozhi-learning-backups\model-diagnostics-20261007；临时MySQL/Mongo/前后端及数据目录清理，业务3306/27017不动。保留原dependency.xml和未跟踪文件。
 - 新增MODEL_DIAGNOSTICS.md，更新CI_TESTING、MYSQL_TESTING、BROWSER_ACCEPTANCE和roadmap。本轮尚未提交推送，等待对应CI验收后推进第12项；物理断网、代理、HTTPS、压力与云端取消仍按实际边界记录。
+
+
+## 2026-10-07：全仓库检查与本机发布包
+
+- f2a6980已截图验收：5项CI成功、5份报告、1分30秒。按用户要求核对全项目文件与IDEA四个红色文件。
+- 建立164个受管文件和4个额外文件的哈希清单。四个红色文件是未跟踪的Git diff/清单输出，复制核验后归档到项目外；dependency.xml参考片段及其原修改保留。
+- 更新过时README/RUNBOOK（Vue入口、登录/CSRF、完整历史、取消已确认预约、MySQL连接命令），给ACCEPTANCE加历史提示，修正学习记录误删句。检查边界见PROJECT_REVIEW.md。
+- 新增release-ui Maven profile、Windows构建与前台启动脚本、外部配置、RELEASE及BACKUP_RESTORE说明；Vue与后端同一个JAR，只监听本机。启动不自动建表/迁移，缺少密码时隐藏输入。
+- 本轮Vue41项/审计0/构建通过，后端release profile执行71项通过、17项数据库测试按默认跳过；完整88项依据上一提交的本机和云端证据。三个框架示例5/7/12项verify通过。
+- 实际发布脚本启动+真实Edge10项通过：账号、Cookie、CSRF、确认扣号、取消释放、刷新保留及生产资源。JAR内容/12文件哈希、端口冲突拒绝、脚本语法/actionlint通过。未调用新模型请求、未改业务库。
+- 发布包F:\xiaozhi-learning-releases\xiaozhi-20261007-023241-f2a6980，标识dirty=true；临时服务和数据目录清理，保留证据F:\xiaozhi-learning-backups\release-review-20261007。
+- CI增加JAR内Vue资源和PowerShell语法检查，仍5任务/5报告。本轮待提交及对应云端验收；没有自动commit/push。
+- 第12项第一阶段本机发布完成。Mongo备份工具尚未安装，双库恢复演练、服务器/HTTPS/代理/公开范围和后端依赖升级评估待后续，不能称整体部署完成。
