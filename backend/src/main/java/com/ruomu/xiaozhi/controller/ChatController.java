@@ -8,6 +8,8 @@ import com.ruomu.xiaozhi.dto.ChatRequest;
 import com.ruomu.xiaozhi.dto.ChatResponse;
 import com.ruomu.xiaozhi.service.AppointmentDraftService;
 import com.ruomu.xiaozhi.service.ChatAssistant;
+import com.ruomu.xiaozhi.service.ConversationHistoryService;
+import org.bson.types.ObjectId;
 import com.ruomu.xiaozhi.service.BusinessDateContext;
 import dev.langchain4j.rag.content.Content;
 import dev.langchain4j.service.Result;
@@ -29,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -53,16 +56,19 @@ public class ChatController {
     private final ChatAssistant assistant;
     private final AppointmentDraftService draftService;
     private final ObjectMapper objectMapper;
+    private final ConversationHistoryService history;
 
     public ChatController(
             ChatAssistant assistant,
             AppointmentDraftService draftService,
             ObjectMapper objectMapper,
+            ConversationHistoryService history,
             @Qualifier("chatStreamExecutor") Executor streamExecutor) {
 
         this.assistant = assistant;
         this.draftService = draftService;
         this.objectMapper = objectMapper;
+        this.history = history;
         this.streamExecutor = streamExecutor;
     }
 
@@ -72,22 +78,23 @@ public class ChatController {
             consumes = "application/json",
             produces = "application/json;charset=UTF-8"
     )
-    public ChatResponse chat(@RequestBody ChatRequest request) {
+    public ChatResponse chat(@RequestBody ChatRequest request,
+            @RequestHeader(name = "X-Conversation-Key", required = false) String accessKey) {
 
         validate(request);
 
-        try (Lease ignored = acquire(request.conversationId().strip())) {
-            Result<String> result = assistant.chat(
-                    request.conversationId().strip(),
-                    request.message().strip(),
-                    BusinessDateContext.now()
-            );
-
-            return new ChatResponse(
-                    result.content(),
-                    collectDrafts(result.toolExecutions()),
-                    collectSources(result.sources())
-            );
+        String id = request.conversationId().strip();
+        try (Lease ignored = acquire(id)) {
+            ObjectId turn = history.begin(id, request.message().strip(), accessKey);
+            try {
+                Result<String> result = assistant.chat(id, request.message().strip(), BusinessDateContext.now());
+                ChatResponse response = new ChatResponse(result.content(), collectDrafts(result.toolExecutions()), collectSources(result.sources()));
+                history.complete(turn, response);
+                return response;
+            } catch (RuntimeException e) {
+                markInterrupted(turn);
+                throw e;
+            }
         }
     }
 
@@ -97,15 +104,19 @@ public class ChatController {
             produces = "text/event-stream;charset=UTF-8"
     )
     public ResponseEntity<SseEmitter> stream(
-            @RequestBody ChatRequest request) {
+            @RequestBody ChatRequest request,
+            @RequestHeader(name = "X-Conversation-Key", required = false) String accessKey) {
 
         validate(request);
 
         String id = request.conversationId().strip();
         Lease lease = acquire(id);
 
+        ObjectId turn;
+        try { turn = history.begin(id, request.message().strip(), accessKey); }
+        catch (RuntimeException e) { lease.close(); throw e; }
         SseEmitter emitter = new SseEmitter(180_000L);
-        StreamState state = new StreamState(emitter, lease);
+        StreamState state = new StreamState(emitter, lease, turn);
 
         emitter.onCompletion(state::disconnected);
         emitter.onError(error -> state.disconnected());
@@ -115,7 +126,7 @@ public class ChatController {
             streamExecutor.execute(() -> {
                 try {
                     if (state.closed.get()) {
-                        lease.close();
+                        state.failMessage("连接在模型启动前已关闭，本轮未完成。");
                         return;
                     }
 
@@ -131,7 +142,7 @@ public class ChatController {
                     );
 
                     if (state.closed.get()) {
-                        lease.close();
+                        state.failMessage("连接在模型启动前已关闭，本轮未完成。");
                         return;
                     }
 
@@ -200,6 +211,7 @@ public class ChatController {
                 }
             });
         } catch (RuntimeException e) {
+            markInterrupted(turn);
             lease.close();
 
             throw new ResponseStatusException(
@@ -237,16 +249,12 @@ public class ChatController {
             )
             String message) {
 
-        ChatRequest request = new ChatRequest(conversationId, message);
-        validate(request);
+        return chat(new ChatRequest(conversationId, message), null).reply();
+    }
 
-        try (Lease ignored = acquire(conversationId.strip())) {
-            return assistant.chat(
-                    conversationId.strip(),
-                    message.strip(),
-                    BusinessDateContext.now()
-            ).content();
-        }
+    private void markInterrupted(ObjectId turn) {
+        try { history.interrupted(turn); }
+        catch (RuntimeException e) { log.warn("历史中断状态暂未写入，异常类型：{}", e.getClass().getSimpleName()); }
     }
 
     private void validate(ChatRequest request) {
@@ -427,6 +435,7 @@ public class ChatController {
 
         private final SseEmitter emitter;
         private final Lease lease;
+        private final ObjectId turn;
 
         private final AtomicBoolean closed = new AtomicBoolean();
         private final AtomicBoolean finished = new AtomicBoolean();
@@ -436,9 +445,10 @@ public class ChatController {
 
         private volatile List<ChatResponse.Source> sources = List.of();
 
-        private StreamState(SseEmitter emitter, Lease lease) {
+        private StreamState(SseEmitter emitter, Lease lease, ObjectId turn) {
             this.emitter = emitter;
             this.lease = lease;
+            this.turn = turn;
         }
 
         private synchronized void send(String event, Object data) {
@@ -486,9 +496,18 @@ public class ChatController {
                 return;
             }
 
-            lease.close();
-            send("done", response);
-            closeTransport();
+            try {
+                // 即使浏览器已断开，真实完成的回复也先持久化，再释放会话。
+                history.complete(turn, response);
+                send("done", response);
+            } catch (RuntimeException e) {
+                markInterrupted(turn);
+                send("failed", Map.of("message", "回复未能完整保存，请同步历史和草稿核实，勿重复提交。"));
+                log.warn("历史保存失败，异常类型：{}", e.getClass().getSimpleName());
+            } finally {
+                lease.close();
+                closeTransport();
+            }
         }
 
         private void failed(Throwable error) {
@@ -510,6 +529,7 @@ public class ChatController {
                 return;
             }
 
+            markInterrupted(turn);
             lease.close();
             send("failed", Map.of("message", message));
             closeTransport();

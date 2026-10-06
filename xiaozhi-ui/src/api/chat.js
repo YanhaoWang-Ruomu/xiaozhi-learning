@@ -1,3 +1,4 @@
+import { browserHeaders } from './browserIdentity.js'
 // 对应后端 a5d496d。连接中断不自动重发聊天，工具可能已生成草稿。
 const hints = {
   400: '输入格式不正确，请检查消息。',
@@ -61,7 +62,7 @@ export async function streamChat({ conversationId, message, signal, onEvent }) {
   try {
     const response = await fetch('/api/chat/stream', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      headers: { ...browserHeaders(), 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({ conversationId, message }),
       cache: 'no-store', signal: controller.signal,
     })
