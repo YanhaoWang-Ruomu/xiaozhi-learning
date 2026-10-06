@@ -16,10 +16,25 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend rules, sources and account isolation
+    name: Backend rules, sources, accounts and MySQL transactions
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      XIAOZHI_TEST_MYSQL_USER: root
+      XIAOZHI_TEST_MYSQL_PASSWORD: ci-test-only
     services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-test-only
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 13307:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pci-test-only"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
       mongo:
         image: mongo:8.0
         ports:
@@ -39,16 +54,18 @@ jobs:
           java-version: '17'
           cache: maven
           cache-dependency-path: backend/pom.xml
-      - name: Test and package backend (isolated Mongo test database, no cloud keys)
-        run: mvn -B -ntp -f backend/pom.xml -Dxiaozhi.auth.integration=true verify
-      - name: Ensure account integration test really ran
+      - name: Test and package backend (isolated MySQL and Mongo, no cloud keys)
+        run: mvn -B -ntp -f backend/pom.xml -Dxiaozhi.auth.integration=true -Dxiaozhi.mysql.integration=true verify
+      - name: Ensure both database integration suites really ran
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
-          report = ET.parse('backend/target/surefire-reports/TEST-com.ruomu.xiaozhi.security.AccountIsolationTest.xml').getroot()
-          assert int(report.attrib['tests']) > 0, 'Account isolation test was not discovered'
-          for key in ('failures', 'errors', 'skipped'):
-              assert int(report.attrib.get(key, 0)) == 0, f'Account isolation test: {key} must be zero'
+          suites = [('security.AccountIsolationTest', 1), ('service.AppointmentMySqlIntegrationTest', 16)]
+          for suite, minimum in suites:
+              report = ET.parse(f'backend/target/surefire-reports/TEST-com.ruomu.xiaozhi.{suite}.xml').getroot()
+              assert int(report.attrib['tests']) >= minimum, f'{suite}: tests missing'
+              for key in ('failures', 'errors', 'skipped'):
+                  assert int(report.attrib.get(key, 0)) == 0, f'{suite}: {key} must be zero'
           PY
       - uses: actions/upload-artifact@v6
         if: always()

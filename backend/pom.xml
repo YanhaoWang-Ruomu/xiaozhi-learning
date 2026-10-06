@@ -81,6 +81,17 @@
     </dependencies>
 
     <build>
+        <!-- Tests use the real repository SQL, never a simplified H2 schema. -->
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <testResource>
+                <directory>${project.basedir}/../sql</directory>
+                <targetPath>booking-schema</targetPath>
+                <includes><include>*.sql</include></includes>
+            </testResource>
+        </testResources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
