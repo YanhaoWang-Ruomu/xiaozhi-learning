@@ -5,7 +5,8 @@ import AppointmentPanel from './AppointmentPanel.vue'
 import { fetchConversationDrafts, streamChat } from '@/api/chat.js'
 import { createConversation, fetchConversations, fetchHistory } from '@/api/conversations.js'
 
-const POINTER_KEY = 'xiaozhi.course-ui.active-conversation.v2'
+const props = defineProps({ userId: { type: String, required: true } })
+const POINTER_KEY = 'xiaozhi.course-ui.active-conversation.v3.' + props.userId
 const conversationId = ref('')
 const messages = ref([])
 const conversations = ref([])
@@ -134,24 +135,13 @@ async function initialize() {
   historyBusy.value = true
   let id = ''
   try {
-    let legacy = false
-    try {
-      id = localStorage.getItem(POINTER_KEY) || ''
-      if (!id) {
-        const saved = JSON.parse(sessionStorage.getItem('xiaozhi.course-ui.chat.v1') || 'null')
-        if (saved && typeof saved.conversationId === 'string' && /^[0-9a-f-]{36}$/i.test(saved.conversationId)) {
-          id = saved.conversationId
-          legacy = true
-        }
-      }
-    } catch { storageNotice.value = '浏览器会话位置无法读取，请从列表选择已有会话。' }
+    try { id = localStorage.getItem(POINTER_KEY) || '' }
+    catch { storageNotice.value = '浏览器会话位置无法读取，请从列表选择已有会话。' }
     const page = await fetchConversations()
+    if (disposed) return
     conversations.value = page.items
     conversationCursor.value = page.nextCursor
-    if (legacy) {
-      await createConversation(id)
-      storageNotice.value = '已关联旧会话编号及其草稿。服务端完整历史从本次升级后开始记录，旧聊天缓存未删除，但不会自动导入。'
-    } else if (!id) id = page.items[0]?.conversationId || (await createConversation(uuidv4())).conversationId
+    if (!id) id = page.items[0]?.conversationId || (await createConversation(uuidv4())).conversationId
     await refreshConversations()
   } catch (error) { status.value = error.message; id = '' }
   finally { historyBusy.value = false }
@@ -245,7 +235,7 @@ onBeforeUnmount(() => {
         <button v-if="conversationCursor" :disabled="listBusy || busy" @click="refreshConversations(true)">更多会话</button>
       </nav>
       <p class="muted">可交流就医需求、查阅演示资料、准备预约草稿。不能替代医生诊断。</p>
-      <a href="http://localhost:8081/demo.html" target="_blank" rel="noopener noreferrer">打开预约演示页 ↗</a>
+      <span>当前账号的会话与演示预约</span>
       <details class="session-info">
         <summary>当前会话编号</summary>
         <p class="identifier">{{ conversationId }}</p>

@@ -33,22 +33,29 @@ import static com.mongodb.client.model.Updates.*;
 public class ConversationHistoryService {
     private final MongoCollection<Document> conversations;
     private final MongoCollection<Document> turns;
+    private final MongoTemplate mongo;
     private final Set<ObjectId> activeTurns = ConcurrentHashMap.newKeySet();
 
     public ConversationHistoryService(MongoTemplate mongo) {
+        this.mongo = mongo;
         conversations = mongo.getCollection("chat_conversations");
         turns = mongo.getCollection("chat_history_turns");
         conversations.createIndex(Indexes.descending("createdKey"));
         turns.createIndex(Indexes.compoundIndex(Indexes.ascending("conversationId"), Indexes.descending("_id")));
     }
 
-    public Conversation create(String requestedId, String accessKey) {
-        String owner = owner(accessKey);
+    public Conversation create(String requestedId, String userId) {
+        String owner = account(userId);
         String id = requestedId == null ? UUID.randomUUID().toString() : requireId(requestedId);
         Date now = new Date();
+        if (conversations.find(eq("_id", id)).first() == null &&
+                (mongo.getCollection("chat_memory").find(eq("_id", id)).first() != null ||
+                 mongo.getCollection("demo_appointment_drafts").find(eq("conversationId", id)).first() != null)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "旧会话不能自动认领，请使用旧浏览器导入或新建会话");
+        }
         try {
             conversations.updateOne(eq("_id", id), combine(
-                    setOnInsert("owner", owner), setOnInsert("createdKey", new ObjectId()), setOnInsert("title", "新会话"),
+                    setOnInsert("userId", owner), setOnInsert("createdKey", new ObjectId()), setOnInsert("title", "新会话"),
                     setOnInsert("createdAt", now), setOnInsert("updatedAt", now)), new UpdateOptions().upsert(true));
         } catch (MongoWriteException e) {
             if (e.getError().getCode() != 11000) throw e;
@@ -56,10 +63,10 @@ public class ConversationHistoryService {
         return conversation(owned(id, owner));
     }
 
-    public ConversationPage list(String before, int limit, String accessKey) {
-        String owner = owner(accessKey);
+    public ConversationPage list(String before, int limit, String userId) {
+        String owner = account(userId);
         int size = pageSize(limit);
-        var query = before == null ? eq("owner", owner) : and(eq("owner", owner), lt("createdKey", cursor(before)));
+        var query = before == null ? eq("userId", owner) : and(eq("userId", owner), lt("createdKey", cursor(before)));
         List<Document> rows = conversations.find(query).sort(descending("createdKey")).limit(size + 1).into(new ArrayList<>());
         boolean more = rows.size() > size;
         if (more) rows.remove(size);
@@ -67,9 +74,9 @@ public class ConversationHistoryService {
                 more ? rows.get(rows.size() - 1).getObjectId("createdKey").toHexString() : null);
     }
 
-    public HistoryPage history(String rawId, String before, int limit, String accessKey) {
+    public HistoryPage history(String rawId, String before, int limit, String userId) {
         String id = requireId(rawId);
-        Document meta = owned(id, owner(accessKey));
+        Document meta = owned(id, account(userId));
         var filter = before == null ? eq("conversationId", id) : and(eq("conversationId", id), lt("_id", cursor(before)));
         List<Document> rows = turns.find(filter).sort(descending("_id")).limit(pageSize(limit) + 1).into(new ArrayList<>());
         boolean more = rows.size() > pageSize(limit);
@@ -95,14 +102,9 @@ public class ConversationHistoryService {
         return new HistoryPage(conversation(meta), List.copyOf(messages), next, processing);
     }
 
-    public ObjectId begin(String rawId, String message, String accessKey) {
+    public ObjectId begin(String rawId, String message, String userId) {
         String id = requireId(rawId);
-        // 旧演示页面不带密钥时仅允许访问尚未归属的新会话，不写展示历史。
-        if (accessKey == null) {
-            if (conversations.find(eq("_id", id)).first() != null) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "此会话需要访问密钥");
-            return null;
-        }
-        create(id, accessKey);
+        create(id, userId);
         ObjectId key = new ObjectId();
         Date now = new Date();
         activeTurns.add(key);
@@ -138,14 +140,28 @@ public class ConversationHistoryService {
         } finally { activeTurns.remove(key); }
     }
 
-    private String owner(String key) {
-        if (key == null || !key.matches("[0-9a-f]{64}")) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "需要有效的浏览器访问密钥");
-        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(key.getBytes(StandardCharsets.UTF_8))); }
-        catch (NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
+    private String account(String id) {
+        if (id == null || !id.matches("[0-9a-f-]{36}")) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
+        return id;
+    }
+    public void requireOwned(String id, String userId) { owned(requireId(id), account(userId)); }
+    public String ownerAccount(String id) {
+        Document row = conversations.find(eq("_id", requireId(id))).first();
+        if (row == null || row.getString("userId") == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "会话未绑定账号");
+        return account(row.getString("userId"));
+    }
+    public long importBrowserHistory(String legacyKey, String userId) {
+        account(userId);
+        if (legacyKey == null || !legacyKey.matches("[0-9a-f]{64}")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "旧浏览器凭据无效");
+        try {
+            String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(legacyKey.getBytes(StandardCharsets.UTF_8)));
+            return conversations.updateMany(and(eq("owner", hash), exists("userId", false)),
+                    combine(set("userId", userId), set("importedAt", new Date()))).getModifiedCount();
+        } catch (NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
     }
     private Document owned(String id, String owner) {
-        Document row = conversations.find(and(eq("_id", id), eq("owner", owner))).first();
-        if (row == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在或不属于当前浏览器");
+        Document row = conversations.find(and(eq("_id", id), eq("userId", owner))).first();
+        if (row == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在或不属于当前账号");
         return row;
     }
 

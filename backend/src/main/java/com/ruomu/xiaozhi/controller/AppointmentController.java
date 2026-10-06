@@ -1,97 +1,45 @@
 package com.ruomu.xiaozhi.controller;
 
-import com.ruomu.xiaozhi.dto.AppointmentDraftResponse;
-import com.ruomu.xiaozhi.dto.AppointmentResponse;
-import com.ruomu.xiaozhi.dto.CancelAppointmentRequest;
-import com.ruomu.xiaozhi.dto.CreateAppointmentRequest;
-import com.ruomu.xiaozhi.service.AppointmentDraftService;
-import com.ruomu.xiaozhi.service.AppointmentService;
+import com.ruomu.xiaozhi.dto.*;
+import com.ruomu.xiaozhi.service.OwnedAppointmentService;
+import com.ruomu.xiaozhi.security.AccountUser;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
-
+import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping(
-        value = "/api/appointments",
-        produces = "application/json;charset=UTF-8"
-)
+@RequestMapping(value="/api/appointments", produces="application/json;charset=UTF-8")
 public class AppointmentController {
-
-    private final AppointmentService appointmentService;
-    private final AppointmentDraftService draftService;
-
-    public AppointmentController(
-            AppointmentService appointmentService,
-            AppointmentDraftService draftService) {
-
-        this.appointmentService = appointmentService;
-        this.draftService = draftService;
+    private final OwnedAppointmentService owned;
+    public AppointmentController(OwnedAppointmentService owned) { this.owned = owned; }
+    @PostMapping("/drafts") @ResponseStatus(HttpStatus.CREATED)
+    public AppointmentDraftResponse createDraft(@RequestBody CreateAppointmentRequest request,
+            @RequestParam("conversationId") String conversationId, Authentication authentication) {
+        return owned.create(request, conversationId, AccountUser.require(authentication).userId());
     }
-
-    @PostMapping("/drafts")
-    @ResponseStatus(HttpStatus.CREATED)
-    public AppointmentDraftResponse createDraft(
-            @RequestBody CreateAppointmentRequest request,
-            @RequestParam(
-                    name = "conversationId",
-                    required = false
-            ) String conversationId) {
-
-        if (conversationId == null) {
-            return draftService.createDraft(request);
-        }
-
-        return draftService.createDraft(request, conversationId);
-    }
-
     @GetMapping("/drafts")
-    public List<AppointmentDraftResponse> findDraftsByConversation(
-            @RequestParam(name = "conversationId") String conversationId) {
-
-        return draftService.findByConversationId(conversationId);
+    public List<AppointmentDraftResponse> list(@RequestParam("conversationId") String conversationId, Authentication authentication) {
+        return owned.list(conversationId, AccountUser.require(authentication).userId());
     }
-
-    @GetMapping("/drafts/{draftId}")
-    public AppointmentDraftResponse findDraft(
-            @PathVariable("draftId") String draftId) {
-
-        return draftService.findById(draftId);
+    @GetMapping("/drafts/{id}")
+    public AppointmentDraftResponse draft(@PathVariable("id") String id, Authentication authentication) {
+        return owned.findDraft(id, AccountUser.require(authentication).userId());
     }
-
-    @PostMapping("/drafts/{draftId}/confirm")
-    public AppointmentResponse confirmDraft(
-            @PathVariable("draftId") String draftId) {
-
-        return draftService.confirm(draftId);
+    @PostMapping("/drafts/{id}/confirm")
+    public AppointmentResponse confirm(@PathVariable("id") String id, Authentication authentication) {
+        return owned.confirm(id, AccountUser.require(authentication).userId());
     }
-
-    @PostMapping("/drafts/{draftId}/cancel")
-    public AppointmentDraftResponse cancelDraft(
-            @PathVariable("draftId") String draftId) {
-
-        return draftService.cancel(draftId);
+    @PostMapping("/drafts/{id}/cancel")
+    public AppointmentDraftResponse cancelDraft(@PathVariable("id") String id, Authentication authentication) {
+        return owned.cancelDraft(id, AccountUser.require(authentication).userId());
     }
-
-    @PostMapping("/{appointmentId}/cancel")
-    public AppointmentResponse cancelAppointment(
-            @PathVariable("appointmentId") String appointmentId,
-            @RequestBody CancelAppointmentRequest request) {
-        return appointmentService.cancel(appointmentId,
-                request != null && Boolean.TRUE.equals(request.confirmed()));
+    @GetMapping("/{id}")
+    public AppointmentResponse appointment(@PathVariable("id") String id, Authentication authentication) {
+        return owned.findAppointment(id, AccountUser.require(authentication).userId());
     }
-
-    @GetMapping("/{appointmentId}")
-    public AppointmentResponse findAppointment(
-            @PathVariable("appointmentId") String appointmentId) {
-
-        return appointmentService.findById(appointmentId);
+    @PostMapping("/{id}/cancel")
+    public AppointmentResponse cancel(@PathVariable("id") String id, @RequestBody CancelAppointmentRequest request, Authentication authentication) {
+        return owned.cancelAppointment(id, request != null && Boolean.TRUE.equals(request.confirmed()), AccountUser.require(authentication).userId());
     }
 }

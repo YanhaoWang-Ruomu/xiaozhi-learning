@@ -5,7 +5,7 @@ import com.ruomu.xiaozhi.dto.AppointmentRuleResponse;
 import com.ruomu.xiaozhi.dto.AppointmentScheduleResponse;
 import com.ruomu.xiaozhi.dto.AppointmentSessionResponse;
 import com.ruomu.xiaozhi.dto.CreateAppointmentRequest;
-import com.ruomu.xiaozhi.service.AppointmentDraftService;
+import com.ruomu.xiaozhi.service.OwnedAppointmentService;
 import com.ruomu.xiaozhi.service.AppointmentRuleService;
 import com.ruomu.xiaozhi.service.AppointmentScheduleService;
 import com.ruomu.xiaozhi.service.AppointmentSessionService;
@@ -23,13 +23,13 @@ import java.util.Map;
 public class AppointmentTools {
 
     private final AppointmentRuleService ruleService;
-    private final AppointmentDraftService draftService;
+    private final OwnedAppointmentService draftService;
     private final AppointmentScheduleService scheduleService;
     private final AppointmentSessionService sessionService;
 
     public AppointmentTools(
             AppointmentRuleService ruleService,
-            AppointmentDraftService draftService,
+            OwnedAppointmentService draftService,
             AppointmentScheduleService scheduleService,
             AppointmentSessionService sessionService) {
 
@@ -212,7 +212,7 @@ public class AppointmentTools {
                 return invalidInput("该场次当前无可用名额或缺少排班，请重新查询并选择其他场次。");
             }
 
-            AppointmentDraftResponse draft = draftService.createDraft(
+            AppointmentDraftResponse draft = draftService.createFromChat(
                     new CreateAppointmentRequest(
                             hospitalId,
                             department,

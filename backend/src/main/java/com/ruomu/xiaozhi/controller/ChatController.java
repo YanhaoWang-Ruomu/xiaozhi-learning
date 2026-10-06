@@ -31,7 +31,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.security.core.Authentication;
+import com.ruomu.xiaozhi.security.AccountUser;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -79,13 +80,13 @@ public class ChatController {
             produces = "application/json;charset=UTF-8"
     )
     public ChatResponse chat(@RequestBody ChatRequest request,
-            @RequestHeader(name = "X-Conversation-Key", required = false) String accessKey) {
+            Authentication authentication) {
 
         validate(request);
 
         String id = request.conversationId().strip();
         try (Lease ignored = acquire(id)) {
-            ObjectId turn = history.begin(id, request.message().strip(), accessKey);
+            ObjectId turn = history.begin(id, request.message().strip(), AccountUser.require(authentication).userId());
             try {
                 Result<String> result = assistant.chat(id, request.message().strip(), BusinessDateContext.now());
                 ChatResponse response = new ChatResponse(result.content(), collectDrafts(result.toolExecutions()), collectSources(result.sources()));
@@ -105,7 +106,7 @@ public class ChatController {
     )
     public ResponseEntity<SseEmitter> stream(
             @RequestBody ChatRequest request,
-            @RequestHeader(name = "X-Conversation-Key", required = false) String accessKey) {
+            Authentication authentication) {
 
         validate(request);
 
@@ -113,7 +114,7 @@ public class ChatController {
         Lease lease = acquire(id);
 
         ObjectId turn;
-        try { turn = history.begin(id, request.message().strip(), accessKey); }
+        try { turn = history.begin(id, request.message().strip(), AccountUser.require(authentication).userId()); }
         catch (RuntimeException e) { lease.close(); throw e; }
         SseEmitter emitter = new SseEmitter(180_000L);
         StreamState state = new StreamState(emitter, lease, turn);
@@ -249,7 +250,7 @@ public class ChatController {
             )
             String message) {
 
-        return chat(new ChatRequest(conversationId, message), null).reply();
+        throw new ResponseStatusException(HttpStatus.METHOD_NOT_ALLOWED, "请在登录后的Vue页面发送消息");
     }
 
     private void markInterrupted(ObjectId turn) {

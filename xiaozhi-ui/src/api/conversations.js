@@ -1,12 +1,12 @@
-import { browserHeaders } from './browserIdentity.js'
+import { apiFetch } from './auth.js'
 import { validateSources } from './chat.js'
 
 async function request(url, body) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15000)
   try {
-    const response = await fetch(url, { method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
-      signal: controller.signal, headers: { ...browserHeaders(), Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    const response = await apiFetch(url, { method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
+      signal: controller.signal, headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     })
     if (!response.ok) throw new Error(`会话接口失败（HTTP ${response.status}），请确认已重启新版后端。`)

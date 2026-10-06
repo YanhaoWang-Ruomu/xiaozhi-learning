@@ -22,6 +22,11 @@
     </properties>
 
     <dependencies>
+        <!-- 登录会话、密码哈希和CSRF防护；版本由Spring Boot管理 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
         <!-- Web 后端：启动服务器、处理 HTTP 请求 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -67,6 +72,11 @@
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

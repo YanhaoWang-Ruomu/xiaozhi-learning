@@ -1,6 +1,9 @@
-import { browserHeaders } from './browserIdentity.js'
-// 对应后端 a5d496d。连接中断不自动重发聊天，工具可能已生成草稿。
+import { apiFetch } from './auth.js'
+// 登录会话和CSRF统一处理；连接中断不自动重发聊天，工具可能已生成草稿。
 const hints = {
+  401: '登录已失效，请重新登录。',
+  403: '安全校验失败，请刷新后核实。',
+  404: '记录不存在或不属于当前账号。',
   400: '输入格式不正确，请检查消息。',
   409: '上一条请求仍在后台处理，请稍后同步草稿，勿重复生成。',
   429: '当前聊天请求较多，请稍后再试。',
@@ -29,7 +32,7 @@ export function validateDrafts(drafts) {
     !['hospitalId', 'department', 'visitDate', 'timeZone'].every(key => typeof item[key] === 'string') ||
     (item.session != null && !['sessionId', 'doctorId', 'doctorName', 'slotId', 'slotName', 'startTime', 'endTime']
       .every(key => typeof item.session[key] === 'string')))) {
-    throw new Error('草稿数据格式异常，请到演示页按编号核实。')
+    throw new Error('草稿数据格式异常，请同步当前会话草稿并核实后端日志。')
   }
   return drafts
 }
@@ -38,7 +41,7 @@ export async function fetchConversationDrafts(conversationId) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15000)
   try {
-    const response = await fetch(`/api/appointments/drafts?conversationId=${encodeURIComponent(conversationId)}`, {
+    const response = await apiFetch(`/api/appointments/drafts?conversationId=${encodeURIComponent(conversationId)}`, {
       cache: 'no-store', signal: controller.signal, headers: { Accept: 'application/json' },
     })
     checkHttp(response)
@@ -60,9 +63,9 @@ export async function streamChat({ conversationId, message, signal, onEvent }) {
   const timer = setTimeout(() => { timedOut = true; controller.abort() }, 200000)
   let reader
   try {
-    const response = await fetch('/api/chat/stream', {
+    const response = await apiFetch('/api/chat/stream', {
       method: 'POST',
-      headers: { ...browserHeaders(), 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({ conversationId, message }),
       cache: 'no-store', signal: controller.signal,
     })

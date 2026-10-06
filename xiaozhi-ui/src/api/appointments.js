@@ -1,3 +1,4 @@
+import { apiFetch } from './auth.js'
 import { validateDrafts } from './chat.js'
 
 export const bookingLabels = {
@@ -59,7 +60,7 @@ async function request(url, body) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), body === undefined ? 15000 : 30000)
   try {
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       method: body === undefined ? 'GET' : 'POST', cache: 'no-store', signal: controller.signal,
       headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
