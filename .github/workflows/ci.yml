@@ -121,6 +121,8 @@ jobs:
           cache-dependency-path: xiaozhi-ui/package-lock.json
       - run: npm ci
       - run: npm run test:ci
+      - name: Audit frontend dependencies (runtime and development)
+        run: npm audit --json --audit-level=low > test-results/npm-audit.json
       - run: npm run build
       - uses: actions/upload-artifact@v6
         if: always()

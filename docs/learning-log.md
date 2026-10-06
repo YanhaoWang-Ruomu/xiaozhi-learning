@@ -893,3 +893,15 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - npm audit对原锁文件为15项、最终为13项（3 moderate/9 high/1 critical），剩余包均在原依赖树，包括form-data等；本轮未引入剩余告警中的新包，也未执行强制批量修复。下一步专门处理旧依赖再进行部署验收。
 - jsdom并不代表真实浏览器TCP断网、Cookie/CSRF、代理、设备输入法或云模型取消已验证。原有后端77项本轮核对报告和云端结果，没有因前端改动重复运行。
 - 备份与验证日志：F:\xiaozhi-learning-backups\frontend-phase4-20261006。后续先提交并验收本次CI，再补依赖修复及必要的浏览器链路检查；第11项尚未整体结束，第12项尚未开始。
+
+
+## 2026-10-06：前端云端验收与依赖审计修复
+
+- 用户截图确认提交f40aee7已推送main，第四阶段5个任务全部成功、5份报告、1分5秒，前端回归阶段云端验收完成。
+- 核对13项告警的依赖链和源码：axios无调用，旧form-data4.0.2由axios引入。移除闲置axios及其链；Vue3.5.13→3.5.43、Element Plus2.9.8→2.14.7、uuid10→11.1.1；其他传递依赖在允许范围内更新，未使用audit fix --force。
+- uuid公告影响带buf的v3/v5/v6，本项目只用v4；升级后保留原接口并通过合法v4检查。包有告警不等于应用存在已被利用的攻击路径。
+- npm ci后审计仍0项；41项前端测试全部通过且无跳过，FRONTEND_REPORT_OK tests=41 suites=4；生产构建、actionlint通过。业务源代码和后端未改，未重复执行后端77项。
+- CI前端新增npm audit --json --audit-level=low，包含运行与开发依赖，报告随frontend-test-reports上传；仍5任务/5报告包。此审计门禁与依赖更新尚未提交推送，云端结果待验收。
+- 文档更新：新增DEPENDENCY_AUDIT.md，记录版本对照、影响边界、命令和验证结果；更新CI_TESTING、FRONTEND_TESTING、STREAM_TESTING和roadmap。
+- 备份和日志在F:\xiaozhi-learning-backups\dependency-audit-20261006。保留原dependency.xml、backup/和用户新增未跟踪文件；没有提交推送。
+- 0项不代表整个项目安全审计完成，真实浏览器、Cookie/CSRF、代理及云模型取消尚需相应验证。生产包仍有大chunk提示。下一步验收本轮CI，再做浏览器关键流程，之后推进打包部署。

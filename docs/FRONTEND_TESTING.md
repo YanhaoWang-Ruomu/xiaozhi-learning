@@ -1,7 +1,7 @@
 # 前端关键交互回归
 
 2026-10-06，第11项第四阶段本机验证：4个测试文件、41项全部通过，0失败、0跳过。
-重新安装锁定依赖（npm ci）、测试报告门禁、Vue生产构建和actionlint均通过。云端待提交推送后验收。
+重新安装锁定依赖（npm ci）、测试报告门禁、Vue生产构建和actionlint均通过。提交f40aee7已由截图验收：5个任务全部成功、5份报告、1分5秒。后续依赖修复的云端结果另行验收。
 
 ## 如何运行
 
@@ -44,11 +44,11 @@ cd F:\xiaozhi-learning\xiaozhi-ui
 
 ## CI与后续
 
-前端任务改名Vue tests and production build：npm ci → npm run test:ci → npm run build。
+前端任务改名Vue tests and production build：npm ci → npm run test:ci → npm audit → npm run build。
 check-report.mjs要求四组分别至少17/8/10/6项且全部passed，缺报告/缺场景/跳过均失败。
 工作流仍为5个任务；新增frontend-test-reports后应有5份报告，保留7天。
 本机完整日志位于F:\xiaozhi-learning-backups\frontend-phase4-20261006\final-check.log，原文件备份也在该目录。
 
-本轮npm audit仍报告13项（3 moderate、9 high、1 critical）；对修改前备份锁文件审计为15项，剩余涉及的包均已存在于原依赖树，包括form-data、axios、Vue、Element Plus、uuid等。本轮最终新增测试工具不在剩余清单。
-这不是安全验收通过；需要在部署前专门核对受影响路径、升级/移除旧依赖并回归，未执行npm audit fix --force。详细审计JSON保存在同一备份目录。
-生产构建仍有原有的大chunk提示。下一步先验收本次云端CI，再处理依赖告警与必要的真实浏览器链路验证，最后进入打包部署。
+第四阶段留下的13项依赖告警已在后续修复中清零；重新npm ci后仍0项，41项测试与构建再次通过。
+CI新增包含开发依赖的审计检查并上传JSON。本次依赖修复云端待提交后验收，详见[DEPENDENCY_AUDIT.md](DEPENDENCY_AUDIT.md)。
+生产构建仍有大chunk提示；下一步验收本次CI，再做必要的真实浏览器链路验证，最后进入打包部署。
