@@ -812,3 +812,16 @@ build() 创建模型客户端，chat() 才真正发送请求。
 - 命令行演示运行成功，显示AISERVICE_COMPARISON_OK并正常退出0。主项目后端和前端运行配置保持原状。
 - 本轮结论：两种方式在本例同步装配范围内等价；注解简化装配，不自动改善模型质量或承担权限校验。主项目暂保留手动配置。
 - 示例README包含运行命令、源码阅读顺序、对应关系及适用边界。第10项还剩Pinecone集成和Flux对照。
+
+
+## 2026-10-06：第10项之二，Pinecone离线契约对照
+
+- 新增examples/pinecone-comparison独立Maven示例，固定LangChain4j1.0.0-beta3，使用真实PineconeEmbeddingStore；只在Pinecone SDK构造与Index网络调用边界使用Mockito替身。
+- 核对现有PineconeClient、KnowledgeSearchService和beta3发布源码：主项目正文键text，集成默认text_segment；必须显式设置namespace和revision过滤；索引名与Host不同。
+- 两边分数均为(cosine+1)/2，但集成从返回values重算cosine，不能沿用主项目includeValues=false的响应假设。
+- 数字元数据恢复为Double，保留编号完整性、资料来源和版本校验；稳定ID需显式传入addAll。
+- Windows mvn test通过：7项、0失败、0错误、0跳过，输出PINECONE_CONTRACT_COMPARISON_OK。
+- 覆盖正文键兼容、来源及分数一致、namespace/revision传参、阈值、Double元数据、无效向量、错误版本/重复ID拒绝和稳定ID写入转换。
+- 不读取云端凭据、不调用真实模型、不连接云索引。测试向量为1024维合成数据；这不是云端连通性、真实语义检索或服务端隔离的验收。
+- 主项目继续使用现有REST客户端；真实迁移仍需补齐同步状态、fetch核验、错误处理和独立namespace云端验收。
+- 下一小步：Flux流式输出对照。运行步骤与差异表见examples/pinecone-comparison/README.md。

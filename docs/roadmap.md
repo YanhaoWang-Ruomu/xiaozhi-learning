@@ -38,6 +38,6 @@
 ### 第10项子进度（2026-10-06）
 
 - @AiService对照：独立示例 examples/aiservice-comparison 已实现；5项测试和命令行演示在Windows通过，主项目继续使用手动装配。
-- LangChain4j Pinecone集成对照：待完成，作为下一小步。
+- LangChain4j Pinecone集成对照：examples/pinecone-comparison离线契约示例完成，真实适配器的7项测试通过。SDK网络边界使用替身，尚未进行真实云端端到端验证或主项目迁移。
 - Flux流式输出对照：待完成。
 - 本次同步装配实验不等于已迁移主项目全部RAG、流式和账号权限逻辑。
