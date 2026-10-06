@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
+import AppointmentPanel from './AppointmentPanel.vue'
 import { fetchConversationDrafts, streamChat, validateSources } from '@/api/chat.js'
 
 const CACHE_KEY = 'xiaozhi.course-ui.chat.v1'
@@ -16,11 +17,8 @@ const drafts = ref([])
 const draftsVerified = ref(false)
 const verifiedAt = ref('')
 const messageList = ref(null)
-const busy = computed(() => isSending.value || isSyncing.value)
-const draftStates = {
-  PENDING_CONFIRMATION: '待确认', CONFIRMING: '确认处理中',
-  CONFIRMED: '已确认', CANCELLED: '草稿已取消', APPOINTMENT_CANCELLED: '预约已取消',
-}
+const appointmentBusy = ref(false)
+const busy = computed(() => isSending.value || isSyncing.value || appointmentBusy.value)
 let activeController = null
 let saveTimer = null
 let disposed = false
@@ -169,15 +167,6 @@ function newChat() {
   synchronizeDrafts()
 }
 
-async function copyId(id) {
-  try {
-    await navigator.clipboard.writeText(id)
-    draftNotice.value = '已复制。打开演示页，在“手动加载已有草稿”中粘贴编号并加载。'
-  } catch {
-    draftNotice.value = '自动复制不可用，请选中卡片中的完整编号，按 Ctrl+C 复制。'
-  }
-}
-
 onMounted(() => {
   restore()
   persist()
@@ -254,24 +243,10 @@ onBeforeUnmount(() => {
         <p class="status" role="status">{{ status }}</p>
       </section>
 
-      <aside class="draft-panel" aria-label="当前会话草稿">
-        <h2>当前会话草稿</h2>
-        <el-button :disabled="busy" @click="synchronizeDrafts">同步当前会话草稿</el-button>
-        <p class="muted">这里只查询和展示。确认或取消，请复制编号后打开预约演示页，在“手动加载已有草稿”中加载并核对。</p>
-        <p class="status" role="status">{{ draftNotice }}</p>
-        <p v-if="draftsVerified" class="muted">查询时间（本机）：{{ verifiedAt }}。状态可能在其他页面改变。</p>
-        <article v-for="draft in drafts" :key="draft.draftId" class="draft-card">
-          <strong>{{ draft.visitDate }} · {{ draft.department }}</strong>
-          <p>{{ draft.hospitalId }} · {{ draft.timeZone }}</p>
-          <p v-if="draft.session">{{ draft.session.doctorName }} · {{ draft.session.slotName }} {{ draft.session.startTime }}–{{ draft.session.endTime }}</p>
-          <p v-else>未指定医生和时段（旧版按日期预约）</p>
-          <p>{{ draftsVerified ? '查询时状态：' : '之前返回的状态（未重新核实）：' }}{{ draftStates[draft.status] || draft.status }}</p>
-          <p class="identifier">{{ draft.draftId }}</p>
-          <p v-if="draft.appointmentId" class="identifier">关联预约：{{ draft.appointmentId }}</p>
-          <el-button size="small" @click="copyId(draft.draftId)">复制草稿编号</el-button>
-        </article>
-        <p v-if="!drafts.length && !isSyncing" class="muted">本页尚无可展示的当前会话草稿。</p>
-      </aside>
+      <AppointmentPanel :conversation-id="conversationId" :drafts="drafts"
+        :verified="draftsVerified" :verified-at="verifiedAt" :notice="draftNotice"
+        :blocked="isSending || isSyncing" :synchronize="synchronizeDrafts"
+        @busy="appointmentBusy = $event" />
     </main>
   </div>
 </template>
@@ -287,7 +262,7 @@ onBeforeUnmount(() => {
 .muted { color: #60748c; font-size: 13px; }
 .session-info { margin-top: 24px; font-size: 13px; }
 .identifier { overflow-wrap: anywhere; user-select: text; font-size: 13px; }
-.main-content { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; flex: 1; min-width: 0; padding: 20px; }
+.main-content { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; flex: 1; min-width: 0; padding: 20px; }
 .chat-container { display: flex; flex-direction: column; min-width: 0; height: calc(100vh - 40px); background: #fff; border-radius: 16px; padding: 20px; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
 h1, h2 { margin: 0 0 12px; font-size: 21px; }
