@@ -4,7 +4,7 @@
 
 2026-10-06，在Windows本机验证：后端34项测试通过，0失败、0错误、0跳过；三个框架示例分别5、7、12项测试通过，`mvn verify`成功；Vue生产构建成功。
 
-这是测试体系的第一阶段，不代表第11项全部完成。GitHub工作流已配置，但首次云端运行必须在推送后查看Actions结果。
+这是测试体系的第一阶段，不代表第11项全部完成。用户提供的GitHub截图已确认提交`2bd56b9`首次云端运行的5个任务全部通过：[运行记录](https://github.com/YanhaoWang-Ruomu/xiaozhi-learning/actions/runs/37439751661)。其中4条注释均为upload-artifact@v4的Node20弃用警告，不是测试失败；现将两处上传步骤升级为官方使用Node24的v6，警告消除情况待新提交的云端运行确认。
 
 ## 覆盖盘点
 
@@ -54,7 +54,7 @@ $env:JAVA_HOME = 'F:\xiaozhi-medical\tools\jdk\jdk-17.0.20.1+1'
 - 推送`main`、面向`main`的Pull Request或手动触发时运行。
 - 后端任务启动临时Mongo 8.0服务容器，Java17执行带账号测试开关的`mvn verify`；随后读取JUnit报告，确保账号测试有执行且没有跳过。
 - 三个独立框架示例并行执行`mvn verify`。
-- Vue使用Node24执行`npm ci`和`npm run build`。本机已验证现有依赖构建；云端干净安装是否成功以首次Actions运行结果为准。
+- Vue使用Node24执行`npm ci`和`npm run build`。本机构建及提交2bd56b9的云端干净安装、构建均已通过。
 - 不需要配置真实DASHSCOPE、Pinecone或MySQL密码。工作流不部署、不发布、不操作本机数据库。
 - Java测试报告保留7天，在对应运行页面的Artifacts下载。检查失败时先查看红色步骤及报告，不只看最后一行。
 - 工作流只有读取仓库权限；并发提交会取消同分支旧运行。分支保护和必需检查尚未配置。
