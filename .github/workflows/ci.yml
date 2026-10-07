@@ -63,7 +63,7 @@ jobs:
           suites = [('security.AccountIsolationTest', 1), ('service.AppointmentMySqlIntegrationTest', 16),
                     ('controller.ChatControllerStreamTest', 27), ('security.AccountSecurityConfigTest', 2),
                     ('config.DashScopeNetworkConfigTest', 3), ('config.ModelErrorSummaryTest', 5),
-                    ('config.DashScopeIdleTimeoutTest', 1)]
+                    ('config.DashScopeIdleTimeoutTest', 1), ('eval.RetrievalEvalTest', 10)]
           for suite, minimum in suites:
               report = ET.parse(f'backend/target/surefire-reports/TEST-com.ruomu.xiaozhi.{suite}.xml').getroot()
               assert int(report.attrib['tests']) >= minimum, f'{suite}: tests missing'
@@ -151,7 +151,7 @@ jobs:
         working-directory: .
         shell: pwsh
         run: |
-          foreach ($file in @('scripts/build-release.ps1', 'deploy/start.ps1', 'scripts/test-backup-restore.ps1')) {
+          foreach ($file in @('scripts/build-release.ps1', 'deploy/start.ps1', 'scripts/test-backup-restore.ps1', 'scripts/test-ai-retrieval.ps1')) {
             $tokens = $null
             $parseErrors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $file), [ref]$tokens, [ref]$parseErrors) | Out-Null

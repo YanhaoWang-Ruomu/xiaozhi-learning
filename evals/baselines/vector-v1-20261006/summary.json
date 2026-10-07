@@ -1,0 +1,30 @@
+{
+  "schemaVersion" : "retrieval-eval-v1",
+  "startedAt" : "2026-10-06T17:06:05.463650700Z",
+  "mode" : "LIVE_EMBEDDING_AND_PINECONE_NO_GENERATION",
+  "gitHead" : "4d27433eb57cf00664ee9ca73d2f2c5aeebb60dd",
+  "trackedDirty" : true,
+  "datasetSha256" : "52d97dc4247a17d3222fd295a573f3f30e93a294cd4ed9833af81518736e9050",
+  "knowledgePreviewSha256" : "260b6437efb4d4535b13628bd49ed63436fd642e097a314d25cfa888080cb4e1",
+  "embeddingModel" : "text-embedding-v3",
+  "policy" : {
+    "candidateTopK" : 3,
+    "acceptedTopK" : 2,
+    "normalizedMinimumScore" : 0.8
+  },
+  "qualityGate" : "UNSET_BASELINE_ONLY",
+  "finishedAt" : "2026-10-06T17:06:38.473725100Z",
+  "status" : "COMPLETE",
+  "summary" : {
+    "planned" : 24,
+    "completed" : 24,
+    "errors" : 0,
+    "notRun" : 0,
+    "positiveDenominator" : 20,
+    "negativeDenominator" : 4,
+    "macroEvidenceRecallAt3" : 1.0,
+    "mrrAt3" : 0.9416666666666667,
+    "macroAcceptedEvidenceRecallAt2" : 0.9,
+    "negativeFalseAcceptanceRate" : 0.0
+  }
+}

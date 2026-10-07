@@ -1,0 +1,24 @@
+{"id": "R01", "category": "location", "query": "演示医院的服务台在哪一层？", "evidence": [{"source": "knowledge/hospital-info.txt", "quote": "演示服务台位于星桥楼一层，标识为蓝色风车。"}]}
+{"id": "R02", "category": "location", "query": "我要找到蓝色风车标识，应该去哪里？", "evidence": [{"source": "knowledge/hospital-info.txt", "quote": "演示服务台位于星桥楼一层，标识为蓝色风车。"}]}
+{"id": "R03", "category": "hospital", "query": "DEMO001目前支持哪个科室？", "evidence": [{"source": "knowledge/hospital-info.txt", "quote": "演示医院编号为 DEMO001，当前程序仅支持内科演示预约。"}]}
+{"id": "R04", "category": "hospital", "query": "这个演示里的就诊流程是怎样的？", "evidence": [{"source": "knowledge/hospital-info.txt", "quote": "核对预约信息、前往演示服务台、按照现场指引等待叫号。"}]}
+{"id": "R05", "category": "confirmation", "query": "聊天里回复确认就能创建预约吗？", "evidence": [{"source": "knowledge/appointment-guide.txt", "quote": "聊天中说“确认”不会替代按钮操作。"}]}
+{"id": "R06", "category": "confirmation", "query": "页面生成了预约草稿，是不是已经挂号成功？", "evidence": [{"source": "knowledge/appointment-guide.txt", "quote": "生成草稿时尚未创建预约。"}]}
+{"id": "R07", "category": "cancellation", "query": "取消待确认草稿以后，还能直接确认这个草稿吗？", "evidence": [{"source": "knowledge/appointment-guide.txt", "quote": "取消后保留记录，禁止再次确认；如仍需预约，要重新创建草稿。"}]}
+{"id": "R08", "category": "cancellation", "query": "已确认的演示预约怎样取消？", "evidence": [{"source": "knowledge/appointment-guide.txt", "quote": "点击“取消已确认的演示预约”，并在弹出的提示中再次确认。"}]}
+{"id": "R09", "category": "idempotency", "query": "同一预约取消两次，会重新修改取消时间吗？", "evidence": [{"source": "knowledge/appointment-guide.txt", "quote": "重复取消返回已有结果，不重复改写取消时间。"}]}
+{"id": "R10", "category": "network", "query": "取消预约时网络中断了，我该重新建一个吗？", "evidence": [{"source": "knowledge/appointment-guide.txt", "quote": "不要只凭网络报错认定失败，也不要自动另建预约。"}]}
+{"id": "R11", "category": "scope", "query": "能通过知识资料查出我的预约编号吗？", "evidence": [{"source": "knowledge/knowledge-scope.txt", "quote": "不保存用户的预约状态、预约编号、实时号源或聊天记录。"}]}
+{"id": "R12", "category": "scope", "query": "演示资料有停车收费和公交路线吗？", "evidence": [{"source": "knowledge/knowledge-scope.txt", "quote": "当前演示资料没有真实医生排班、诊疗费用、停车收费或公交路线信息。"}]}
+{"id": "R13", "category": "privacy", "query": "使用演示预约需要提交身份证和银行卡吗？", "evidence": [{"source": "knowledge/knowledge-scope.txt", "quote": "演示流程不要求用户提交身份证号或银行卡号。"}]}
+{"id": "R14", "category": "scope", "query": "我要核实某次预约操作是否成功，应看什么？", "evidence": [{"source": "knowledge/knowledge-scope.txt", "quote": "查询某次操作是否成功，应以业务查询接口返回的记录为准，不能从知识文档推断。"}]}
+{"id": "R15", "category": "pdf", "query": "演示手册里的轮椅借用点在哪？", "evidence": [{"source": "knowledge/visit-handbook.pdf", "quote": "轮椅借用点位于星桥楼一层西侧的青竹服务台。"}]}
+{"id": "R16", "category": "pdf", "query": "青竹服务台的标识是什么？", "evidence": [{"source": "knowledge/visit-handbook.pdf", "quote": "青竹服务台的识别标志是绿色叶子图案。"}]}
+{"id": "R17", "category": "pdf", "query": "东西丢了，演示的遗失物品登记处在哪里？", "evidence": [{"source": "knowledge/visit-handbook.pdf", "quote": "遗失物品登记处位于星桥楼一层东侧的橙帆服务台。"}]}
+{"id": "R18", "category": "pdf", "query": "小智能帮我实际登记或领取遗失物品吗？", "evidence": [{"source": "knowledge/visit-handbook.pdf", "quote": "小智目前不能实际登记、领取或查询遗失物品。"}]}
+{"id": "R19", "category": "multi_evidence", "query": "普通演示服务台和轮椅借用服务台各是什么标识？", "evidence": [{"source": "knowledge/hospital-info.txt", "quote": "标识为蓝色风车。"}, {"source": "knowledge/visit-handbook.pdf", "quote": "青竹服务台的识别标志是绿色叶子图案。"}]}
+{"id": "R20", "category": "multi_evidence", "query": "聊天说确认是否能提交预约，知识文件是否保存预约编号？", "evidence": [{"source": "knowledge/appointment-guide.txt", "quote": "聊天中说“确认”不会替代按钮操作。"}, {"source": "knowledge/knowledge-scope.txt", "quote": "不保存用户的预约状态、预约编号、实时号源或聊天记录。"}]}
+{"id": "N01", "category": "out_of_domain", "query": "如何用Java实现快速排序？", "evidence": []}
+{"id": "N02", "category": "out_of_domain", "query": "请推荐一款适合拍星空的相机。", "evidence": []}
+{"id": "N03", "category": "out_of_domain", "query": "法国大革命发生在哪一年？", "evidence": []}
+{"id": "N04", "category": "out_of_domain", "query": "给我写一首关于秋天落叶的诗。", "evidence": []}

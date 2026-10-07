@@ -69,3 +69,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql.ps1 -Ja
 发布包提交75174a6已截图验收5任务、5报告、1分34秒。本轮增加scripts/test-backup-restore.ps1的PowerShell解析和backup-restore-probe.mjs的Node语法检查，actionlint通过；任务和报告仍各5项，对应新提交尚待云端验收。
 
 双库恢复专项在Windows隔离实例执行：MySQL9表28行、Mongo5集合9文档的内容及结构/索引一致，恢复后的6组真实HTTP业务断言通过，清理成功。具体步骤、失败修复与边界见BACKUP_DRILL.md。不是新增6项JUnit测试，后端88项、前端41项与示例5/7/12项统计不变；本轮构建使用-DskipTests，没有冒充重跑完整套件。CI不下载Mongo工具或执行该Windows恢复演练。
+
+
+## 2026-10-07：检索评测器离线门禁
+
+- 新增RetrievalEvalTest共10项，默认随backend的mvn verify运行；CI检查报告存在且10项以上、0失败/错误/跳过。
+- 10项测试验证24题数据集原文、PDF解析依据和评分计算，不访问云模型/Pinecone/业务数据库，不产生真实AI质量分数。
+- scripts/test-ai-retrieval.ps1加入Windows脚本解析检查；真实云端采集只在显式-Live运行，不进入CI。
+- 预期完整后端由历史88项增加至98项；本轮本机只运行新增10项并通过，尚未宣称98项完整套件已验收。前端41项和5个CI任务结构保持不变。
+- actionlint与PowerShell解析本机通过，云端待提交推送后验收。
+- 真实24题检索运行及指标边界见AI_EVALS.md；原始基线位于evals/baselines/vector-v1-20261006。
