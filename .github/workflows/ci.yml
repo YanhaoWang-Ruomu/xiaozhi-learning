@@ -64,7 +64,7 @@ jobs:
                     ('controller.ChatControllerStreamTest', 27), ('security.AccountSecurityConfigTest', 2),
                     ('config.DashScopeNetworkConfigTest', 3), ('config.ModelErrorSummaryTest', 5),
                     ('config.DashScopeIdleTimeoutTest', 1), ('eval.RetrievalEvalTest', 10), ('context.ContextEngineeringTest', 7),
-                    ('service.HybridKnowledgeTest', 7), ('observability.TracingTest', 3)]
+                    ('service.HybridKnowledgeTest', 7), ('observability.TracingTest', 3), ('observability.OtlpExportTest', 4)]
           for suite, minimum in suites:
               report = ET.parse(f'backend/target/surefire-reports/TEST-com.ruomu.xiaozhi.{suite}.xml').getroot()
               assert int(report.attrib['tests']) >= minimum, f'{suite}: tests missing'
@@ -124,6 +124,10 @@ jobs:
           cache-dependency-path: xiaozhi-ui/package-lock.json
       - run: npm ci
       - run: npm run test:ci
+      - name: Install browser for transport and mobile interaction checks
+        run: npx playwright install --with-deps chromium
+      - name: Check browser recovery and confirmation flows (controlled HTTP backend)
+        run: npm run test:browser
       - name: Audit frontend dependencies (runtime and development)
         run: npm audit --json --audit-level=low > test-results/npm-audit.json
       - name: Test read-only MCP protocol and dependency audit

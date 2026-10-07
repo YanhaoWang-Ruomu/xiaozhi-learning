@@ -380,7 +380,7 @@ class AppointmentMySqlIntegrationTest {
         var fixture=new AppointmentMySqlIntegrationTest();
         var output=java.nio.file.Path.of(args[0]);java.nio.file.Files.createDirectory(output);
         var json=new com.fasterxml.jackson.databind.ObjectMapper();
-        var telemetry=new com.ruomu.xiaozhi.observability.TelemetryConfig().aiTelemetry("");
+        var telemetry=new com.ruomu.xiaozhi.observability.TelemetryConfig().aiTelemetry("", "");
         var rows=new ArrayList<java.util.Map<String,Object>>();
         int exit=0;
         try {

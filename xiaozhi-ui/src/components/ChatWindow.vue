@@ -29,8 +29,28 @@ const draftsVerified = ref(false)
 const verifiedAt = ref('')
 const messageList = ref(null)
 const appointmentBusy = ref(false)
+const online = ref(navigator.onLine)
+const search = ref('')
+const sidebarOpen = ref(false)
+const showAppointments = ref(false)
+const followingLatest = ref(true)
+const copyNotice = ref('')
+const visibleConversations = computed(() => conversations.value.filter(item => item.title.toLowerCase().includes(search.value.trim().toLowerCase())))
+const currentTitle = computed(() => conversations.value.find(item => item.conversationId === conversationId.value)?.title || '新的导诊会话')
+const pendingCount = computed(() => drafts.value.filter(item => item.status === 'PENDING_CONFIRMATION').length)
+const quickPrompts = [
+  { title: '了解导诊范围', text: '你能提供哪些就医准备帮助？' },
+  { title: '查阅就诊资料', text: '请根据演示资料介绍就诊前需要做哪些准备。' },
+  { title: '查询医生时段', text: '请查询 DEMO001 内科明天的医生和时段，先不要生成草稿。' },
+]
+function fillPrompt(text) { inputMessage.value = text; nextTick(() => document.getElementById('chat-message')?.focus()) }
+function trackScroll() { const el = messageList.value; if (el) followingLatest.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }
+async function copyReply(text) { try { await navigator.clipboard.writeText(text); copyNotice.value = '回复已复制。' } catch { copyNotice.value = '无法自动复制，请选中文字后复制。' } }
+function wentOffline() { online.value = false; historyVerified.value = false; draftsVerified.value = false; activeController?.abort(); status.value = '网络已断开。恢复连接后会同步结果，不会自动重发消息。' }
+function wentOnline() { online.value = true; if (!busy.value && conversationId.value) void synchronizeHistory(); else if (!conversationId.value) void initialize() }
+
 const busy = computed(() => isSending.value || isSyncing.value || appointmentBusy.value || historyBusy.value)
-const canSend = computed(() => historyReady.value && historyVerified.value && !busy.value && !serverProcessing.value)
+const canSend = computed(() => online.value && historyReady.value && historyVerified.value && !busy.value && !serverProcessing.value)
 let activeController = null
 let disposed = false
 let pollTimer
@@ -39,9 +59,10 @@ function savePointer() {
   try { localStorage.setItem(POINTER_KEY, conversationId.value) }
   catch { storageNotice.value = '浏览器未能保存当前会话位置；仍可从服务端会话列表选择。' }
 }
-async function scrollToBottom() {
+async function scrollToBottom(force = false) {
   await nextTick()
-  if (messageList.value) messageList.value.scrollTop = messageList.value.scrollHeight
+  if (messageList.value && !messages.value.length) { messageList.value.scrollTop = 0; return }
+  if (messageList.value && (force || followingLatest.value)) { messageList.value.scrollTop = messageList.value.scrollHeight; followingLatest.value = true }
 }
 async function refreshConversations(more = false) {
   if (listBusy.value) return
@@ -102,6 +123,8 @@ async function selectConversation(id) {
   if (inputMessage.value.trim() && !window.confirm('切换会话将清空尚未发送的输入，继续吗？')) return
   historyBusy.value = true
   conversationId.value = id
+  sidebarOpen.value = false
+  followingLatest.value = true
   messages.value = []
   drafts.value = []
   inputMessage.value = ''
@@ -152,6 +175,7 @@ async function sendMessage() {
   if (!canSend.value || !text) return
   if (text.length > 2000) { status.value = '消息最多 2000 字符。'; return }
   const id = conversationId.value
+  followingLatest.value = true
   isSending.value = true
   inputMessage.value = ''
   messages.value.push({ id: uuidv4(), role: 'user', content: text, sources: [], state: 'complete' })
@@ -202,40 +226,44 @@ function onInputKey(event) {
   }
 }
 onMounted(() => {
+  window.addEventListener('offline', wentOffline)
+  window.addEventListener('online', wentOnline)
   initialize()
   pollTimer = setInterval(() => {
-    if (!document.hidden && serverProcessing.value && !busy.value) synchronizeHistory()
+    if (online.value && !document.hidden && (serverProcessing.value || !historyVerified.value) && conversationId.value && !busy.value) synchronizeHistory()
   }, 5000)
 })
 onBeforeUnmount(() => {
   disposed = true
+  window.removeEventListener('offline', wentOffline)
+  window.removeEventListener('online', wentOnline)
   activeController?.abort()
   clearInterval(pollTimer)
 })
 </script>
 
 <template>
-  <div class="app-layout">
+  <div class="app-layout" :class="{ 'sidebar-open': sidebarOpen, 'appointments-open': showAppointments }">
+    <div class="mobile-toolbar"><button :aria-expanded="sidebarOpen" @click="sidebarOpen = !sidebarOpen">会话列表</button><button :aria-expanded="showAppointments" @click="showAppointments = !showAppointments">{{ showAppointments ? '返回对话' : '排班与预约' }}<span v-if="pendingCount"> · {{ pendingCount }} 待确认</span></button></div>
     <aside class="sidebar">
-      <div class="brand">
-        <img src="@/assets/logo.png" alt="课程小智图标" width="88" height="88" />
-        <div><strong>小智医疗导诊</strong><span>课程前端 · 学习演示</span></div>
-      </div>
+      <div class="sidebar-heading"><span class="eyebrow">我的空间</span><h2>会话记录</h2></div>
       <el-button class="wide" :disabled="busy" @click="newChat">新会话</el-button>
+      <label class="conversation-search"><span class="sr-only">搜索已加载会话</span><input v-model="search" placeholder="搜索已加载会话" type="search" /></label>
       <nav class="conversation-list" aria-label="会话列表">
         <div class="actions">
           <button :disabled="listBusy || busy" @click="refreshConversations(false)">刷新会话列表</button>
           <button v-if="!historyReady" :disabled="busy" @click="initialize">重新连接</button>
         </div>
-        <p class="muted">{{ listNotice }}</p>
-        <button v-for="item in conversations" :key="item.conversationId" class="conversation-choice"
+        <p v-if="listNotice && !listNotice.startsWith('按创建时间')" class="muted">{{ listNotice }}</p>
+        <p v-if="search && !visibleConversations.length" class="muted">已加载的会话中没有匹配项。</p>
+        <button v-for="item in visibleConversations" :key="item.conversationId" class="conversation-choice"
           :class="{ selected: item.conversationId === conversationId }" :disabled="busy"
           :aria-current="item.conversationId === conversationId ? 'true' : undefined"
           @click="selectConversation(item.conversationId)">{{ item.title }}</button>
         <button v-if="conversationCursor" :disabled="listBusy || busy" @click="refreshConversations(true)">更多会话</button>
       </nav>
       <p class="muted">可交流就医需求、查阅演示资料、准备预约草稿。不能替代医生诊断。</p>
-      <span>当前账号的会话与演示预约</span>
+      <span class="sidebar-footnote">记录仅对当前账号可见</span>
       <details class="session-info">
         <summary>当前会话编号</summary>
         <p class="identifier">{{ conversationId }}</p>
@@ -246,16 +274,20 @@ onBeforeUnmount(() => {
 
     <main class="main-content">
       <section class="chat-container" aria-label="与小智交流">
-        <header><h1>与小智交流</h1><span class="muted">预约业务时区：Asia/Shanghai</span></header>
+        <header class="chat-heading"><div><span class="eyebrow">导诊对话</span><h1>{{ currentTitle }}</h1></div><span class="connection-state" :class="{ offline: !online }">{{ !online ? '网络已断开' : isSending || serverProcessing ? '正在处理' : !historyVerified ? '待同步' : '就绪' }}</span></header>
+        <p class="scope-note">提供就医方向参考与演示资料，不能替代医生诊断。</p>
+        <div v-if="!online" class="network-notice" role="alert">网络已断开，发送与预约操作已暂停。联网后将同步服务端结果，不会自动重发。</div>
         <div class="history-actions">
           <button :disabled="busy || !conversationId" @click="synchronizeHistory(false)">同步聊天历史</button>
           <button v-if="historyCursor" :disabled="busy" @click="synchronizeHistory(true)">加载更早消息</button>
         </div>
-        <div ref="messageList" class="message-list" aria-label="聊天记录">
+        <div ref="messageList" class="message-list" aria-label="聊天记录" @scroll="trackScroll">
           <div v-if="!messages.length" class="welcome">
-            <h2>你好，我是小智</h2>
-            <p>可以先问“你能做什么”，也可以查询 DEMO001 内科的演示排班。</p>
-            <p class="muted">页面打开时不会自动发送消息。</p>
+            <span class="welcome-mark" aria-hidden="true">✚</span><span class="eyebrow">小智 · 就医准备助手</span>
+            <h2>今天，有什么可以帮你？</h2>
+            <p>从一个问题开始，逐步理清需求。<br />也可以选择下面的入口，编辑后再发送。</p>
+            <div class="quick-prompts"><button v-for="(prompt, index) in quickPrompts" :key="prompt.title" :disabled="!canSend" @click="fillPrompt(prompt.text)"><span class="prompt-number">0{{ index + 1 }}</span><strong>{{ prompt.title }}</strong><span aria-hidden="true">↗</span></button></div>
+            <p class="muted">所有排班和预约均为演示数据，不连接真实医院。</p>
           </div>
           <article v-for="message in messages" :key="message.id" class="message"
             :class="message.role === 'user' ? 'user-message' : 'bot-message'">
@@ -266,6 +298,7 @@ onBeforeUnmount(() => {
             <!-- 纯文本插值，用户输入和模型输出均不能作为 HTML 执行。 -->
             <div class="message-text">{{ message.content || (['streaming', 'processing'].includes(message.state) ? '正在准备回复……' : '本轮未完整保存回复，请核实草稿后再继续。') }}</div>
             <p v-if="message.state === 'interrupted'" class="warning">本轮未完整取得；不会自动重发。后台可能已生成草稿，请稍后同步核实。</p>
+            <button v-if="message.role === 'assistant' && message.content && message.state === 'complete'" class="copy-reply" @click="copyReply(message.content)">复制回复</button>
             <details v-if="message.sources.length" class="sources">
               <summary>本轮检索参考片段（{{ message.sources.length }}）</summary>
               <p class="muted">这些是检索候选片段，不代表每句话都有依据，也不代表真实医院资料。</p>
@@ -276,14 +309,17 @@ onBeforeUnmount(() => {
             </details>
           </article>
         </div>
+        <button v-if="!followingLatest" class="latest-button" @click="scrollToBottom(true)">回到最新消息 ↓</button>
+        <span class="sr-only" role="status">{{ copyNotice }}</span>
         <form class="input-container" @submit.prevent="sendMessage">
-          <label for="chat-message">你的消息</label>
+          <label for="chat-message">描述你的需求</label>
           <el-input id="chat-message" v-model="inputMessage" type="textarea" :rows="3" maxlength="2000"
             show-word-limit placeholder="请输入消息；Enter 发送，Shift+Enter 换行" :disabled="!canSend" @keydown="onInputKey" />
-          <div class="actions">
+          <div class="actions composer-actions">
+            <span class="composer-hint">Enter 发送 · Shift+Enter 换行</span>
             <el-button type="primary" native-type="submit" :disabled="!canSend || !inputMessage.trim()">发送消息</el-button>
             <el-button v-if="isSending" :disabled="!activeController" @click="activeController?.abort()">停止接收</el-button>
-            <el-button :disabled="busy" @click="inputMessage = '请查询 DEMO001 内科明天的医生和时段，先不要生成草稿。'">填入排班查询</el-button>
+
           </div>
         </form>
         <p class="status" role="status">{{ status }}</p>
@@ -291,68 +327,505 @@ onBeforeUnmount(() => {
 
       <AppointmentPanel v-if="historyReady" :key="conversationId" :conversation-id="conversationId" :drafts="drafts"
         :verified="draftsVerified" :verified-at="verifiedAt" :notice="draftNotice"
-        :blocked="isSending || isSyncing || historyBusy || !historyVerified || serverProcessing" :synchronize="synchronizeDrafts"
+        :blocked="!online || isSending || isSyncing || historyBusy || !historyVerified || serverProcessing" :synchronize="synchronizeDrafts"
         @busy="appointmentBusy = $event" />
     </main>
   </div>
 </template>
 
 <style scoped>
-.conversation-list { margin: 16px 0; }
-.conversation-list button, .history-actions button { border: 1px solid #cfdbeb; border-radius: 7px; background: #fff; padding: 8px; color: #365c8b; cursor: pointer; font: inherit; font-size: 13px; }
-.conversation-choice { display: block; width: 100%; margin: 6px 0; text-align: left; overflow-wrap: anywhere; }
-.conversation-choice.selected { background: #dce9fd; border-color: #638cca; }
-button:disabled { opacity: .5; cursor: not-allowed; }
-.history-actions { display: flex; gap: 8px; margin: 6px 0; }
-
-.app-layout { display: flex; min-height: 100vh; }
-.sidebar { overflow-y: auto; max-height: 100vh; width: 220px; flex-shrink: 0; padding: 24px 18px; background: #eaf1fb; border-right: 1px solid #dce5f2; }
-.brand { text-align: center; margin-bottom: 24px; }
-.brand img { object-fit: contain; }
-.brand strong { display: block; font-size: 19px; }
-.brand span { display: block; font-size: 13px; color: #60748c; }
-.wide { width: 100%; }
-.muted { color: #60748c; font-size: 13px; }
-.session-info { margin-top: 24px; font-size: 13px; }
-.identifier { overflow-wrap: anywhere; user-select: text; font-size: 13px; }
-.main-content { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; flex: 1; min-width: 0; padding: 20px; }
-.chat-container { display: flex; flex-direction: column; min-width: 0; height: calc(100vh - 40px); background: #fff; border-radius: 16px; padding: 20px; }
-header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
-h1, h2 { margin: 0 0 12px; font-size: 21px; }
-.message-list { overflow-y: auto; flex: 1; min-height: 180px; padding: 12px 4px; }
-.welcome { padding: 24px 12px; }
-.message { border-radius: 12px; padding: 16px; margin: 0 0 16px; overflow-wrap: anywhere; }
-.user-message { background: #e9f1ff; margin-left: 12%; }
-.bot-message { background: #f4f7fa; margin-right: 4%; }
-.message-label { font-weight: bold; font-size: 13px; color: #58718e; margin-bottom: 8px; }
-.message-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.warning { color: #9a5012; font-size: 13px; }
-.sources { border-top: 1px solid #dce4ee; padding-top: 10px; margin-top: 14px; font-size: 13px; }
-summary { cursor: pointer; }
-.source { padding: 12px 0; border-top: 1px solid #dce4ee; }
-.source strong { display: block; margin-bottom: 8px; }
-.input-container { padding-top: 10px; }
-.input-container label { display: block; margin-bottom: 8px; font-size: 14px; }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.actions .el-button + .el-button { margin-left: 0; }
-.status { color: #536e8f; font-size: 13px; margin: 12px 0 0; overflow-wrap: anywhere; }
-.draft-panel { padding: 20px; background: white; border-radius: 16px; max-height: calc(100vh - 40px); overflow-y: auto; }
-.draft-card { border: 1px solid #d8e3f4; background: #f7faff; padding: 14px; border-radius: 12px; margin-top: 16px; font-size: 14px; }
-.draft-card p { margin: 8px 0; }
-@media (max-width: 1100px) {
-  .sidebar { overflow-y: auto; max-height: 100vh; width: 190px; }
-  .main-content { grid-template-columns: minmax(0, 1fr); }
-  .chat-container { height: 78vh; }
-  .draft-panel { max-height: none; }
+.app-layout {
+  display:flex;
+  height:calc(100dvh - 69px);
+  min-height:560px
 }
-@media (max-width: 640px) {
-  .app-layout { flex-direction: column; }
-  .sidebar { overflow-y: auto; max-height: 100vh; width: 100%; padding: 16px; }
-  .brand { display: flex; align-items: center; gap: 12px; text-align: left; margin-bottom: 12px; }
-  .brand img { width: 48px; height: 48px; }
-  .session-info { margin-top: 12px; }
-  .main-content { padding: 12px; gap: 12px; }
-  .chat-container, .draft-panel { padding: 16px; }
-  .chat-container { height: 80vh; }
+.sidebar {
+  width:230px;
+  flex-shrink:0;
+  background:#f8faf8;
+  border-right:1px solid var(--line);
+  padding:28px 20px;
+  display:flex;
+  flex-direction:column;
+  overflow:auto
+}
+.sidebar-heading h2 {
+  font-size:19px;
+  margin:4px 0 22px;
+  font-weight:600
+}
+.wide {
+  width:100%;
+  min-height:42px;
+  color:#08786d;
+  border-color:#b6d5c9;
+  background:#edf5f0
+}
+.conversation-search input {
+  margin:18px 0 8px;
+  width:100%;
+  font-size:12px;
+  padding:10px 12px;
+  background:white;
+  border:1px solid var(--line);
+  border-radius:8px;
+  color:var(--ink)
+}
+.conversation-list {
+  flex:1;
+  min-height:120px;
+  overflow:auto;
+  margin-bottom:16px
+}
+.conversation-list .actions {
+  margin:0 0 14px
+}
+.conversation-list button,.history-actions button {
+  border:0;
+  background:transparent;
+  color:#59736c;
+  padding:6px;
+  cursor:pointer;
+  font-size:12px
+}
+.conversation-list .conversation-choice {
+  display:block;
+  width:100%;
+  margin:5px 0;
+  padding:11px 12px;
+  text-align:left;
+  border-radius:8px;
+  font-size:13px;
+  overflow-wrap:anywhere;
+  border:1px solid transparent
+}
+.conversation-choice.selected {
+  color:#066f64;
+  background:#e6f0e9!important;
+  border-color:#d0e2d6!important;
+  font-weight:600
+}
+.sidebar>.muted,.sidebar-footnote {
+  font-size:12px;
+  color:#75877f
+}
+.session-info {
+  font-size:12px;
+  color:#667e74;
+  margin-top:14px
+}
+.identifier {
+  overflow-wrap:anywhere
+}
+.main-content {
+  flex:1;
+  min-width:0;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 340px;
+  gap:18px;
+  padding:22px
+}
+.chat-container {
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  min-height:0;
+  background:white;
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:24px
+}
+.chat-heading {
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:center
+}
+.chat-heading h1 {
+  font-size:20px;
+  font-weight:600;
+  margin:3px 0;
+  overflow-wrap:anywhere;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden
+}
+.connection-state {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  white-space:nowrap;
+  color:#4f796b;
+  background:#f0f7f2;
+  padding:4px 9px;
+  border-radius:20px
+}
+.connection-state::before {
+  content:'';
+  width:6px;
+  height:6px;
+  background:#4f8870;
+  border-radius:50%
+}
+.connection-state.offline {
+  color:#975e1f;
+  background:#fff3dd
+}
+.scope-note {
+  font-size:12px;
+  color:#73847b;
+  margin:4px 0 14px
+}
+.history-actions {
+  display:flex;
+  gap:12px;
+  border-top:1px solid #edf1ee;
+  padding-top:8px
+}
+.history-actions button {
+  padding:4px 0
+}
+.message-list {
+  overflow-y:auto;
+  flex:1;
+  min-height:140px;
+  padding:20px 4px;
+  scrollbar-width:thin;
+  scrollbar-color:#c5d5cd transparent
+}
+.welcome {
+  max-width:590px;
+  margin:auto;
+  padding:clamp(24px,6vh,64px) 12px 20px
+}
+.welcome-mark {
+  display:grid;
+  place-items:center;
+  width:48px;
+  height:48px;
+  margin-bottom:24px;
+  border-radius:16px;
+  background:#e6f2ec;
+  color:#087f75;
+  font-size:29px
+}
+.welcome h2 {
+  font-size:clamp(23px,2vw,30px);
+  font-weight:550;
+  letter-spacing:-.03em;
+  margin:10px 0
+}
+.welcome p {
+  color:#6c8177;
+  font-size:14px;
+  line-height:1.9
+}
+.welcome .muted {
+  font-size:12px
+}
+.quick-prompts {
+  display:grid;
+  gap:9px;
+  margin:25px 0
+}
+.quick-prompts button {
+  display:flex;
+  align-items:center;
+  gap:14px;
+  text-align:left;
+  padding:13px 15px;
+  background:white;
+  border:1px solid #dfe9e2;
+  border-radius:10px;
+  color:#375c4e;
+  font-size:13px
+}
+.quick-prompts strong {
+  font-weight:500;
+  flex:1
+}
+.prompt-number {
+  font-size:11px;
+  color:#7d9487
+}
+.message {
+  padding:18px 20px;
+  border-radius:12px;
+  margin:0 0 22px;
+  overflow-wrap:anywhere;
+  font-size:14px;
+  line-height:1.9
+}
+.user-message {
+  background:#edf5f0;
+  margin-left:16%;
+  border:1px solid #dfece3
+}
+.bot-message {
+  background:#fff;
+  padding-left:0;
+  padding-right:8px
+}
+.message-label {
+  font-size:12px;
+  font-weight:650;
+  color:#557c6e;
+  margin-bottom:9px
+}
+.message-text {
+  white-space:pre-wrap;
+  overflow-wrap:anywhere
+}
+.copy-reply {
+  font-size:11px;
+  margin-top:12px;
+  padding:3px 0;
+  color:#748b7f;
+  background:transparent;
+  border:0
+}
+.sources {
+  font-size:12px;
+  margin-top:12px;
+  border:1px solid #e0e8e1;
+  border-radius:8px;
+  background:#f8faf7;
+  padding:10px 12px
+}
+.sources summary {
+  color:#54745d;
+  cursor:pointer
+}
+.sources .muted {
+  font-size:12px
+}
+.source {
+  border-top:1px solid #e0e8e1;
+  padding:12px 0
+}
+.source strong {
+  display:block;
+  margin-bottom:6px;
+  font-weight:600
+}
+.source .message-text {
+  max-height:240px;
+  overflow:auto
+}
+.input-container {
+  border:1px solid #d3e1d8;
+  border-radius:12px;
+  padding:12px 14px 10px;
+  box-shadow:0 3px 16px #183d2210
+}
+.input-container label {
+  display:block;
+  font-size:12px;
+  color:#6a8073;
+  margin-bottom:8px
+}
+.input-container :deep(.el-textarea__inner) {
+  box-shadow:none;
+  padding:0;
+  background:transparent;
+  resize:none;
+  font-size:14px;
+  line-height:1.8
+}
+.input-container :deep(.el-textarea.is-disabled .el-textarea__inner) {
+  background:#f7f9f7
+}
+.input-container :deep(.el-input__count) {
+  background:transparent;
+  font-size:10px
+}
+.actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:12px
+}
+.actions .el-button+.el-button {
+  margin-left:0
+}
+.composer-actions {
+  align-items:center
+}
+.composer-hint {
+  font-size:10px;
+  color:#73877a;
+  margin-right:auto
+}
+.composer-actions .el-button {
+  font-size:12px
+}
+.status {
+  color:#637d6d;
+  font-size:11px;
+  margin:10px 2px 0;
+  overflow-wrap:anywhere
+}
+.warning,.network-notice {
+  color:#8d5e24;
+  font-size:12px
+}
+.network-notice {
+  background:#fff4e0;
+  padding:10px;
+  border-radius:8px;
+  margin-bottom:8px
+}
+.latest-button {
+  position:absolute;
+  bottom:218px;
+  left:50%;
+  transform:translateX(-50%);
+  padding:7px 14px;
+  border:1px solid #bdd6c5;
+  border-radius:20px;
+  background:#fff;
+  color:#3e7151;
+  box-shadow:0 2px 10px #254a2320;
+  font-size:12px
+}
+.mobile-toolbar {
+  display:none
+}
+@media(min-width:1600px) {
+  .main-content {
+    grid-template-columns:minmax(0,1fr) 380px;
+    max-width:1700px;
+    margin:0 auto;
+    width:100%
+  }
+  .chat-container {
+    padding:28px 36px
+  }
+}
+@media(max-width:1200px) {
+  .sidebar {
+    width:200px;
+    padding:24px 14px
+  }
+  .main-content {
+    grid-template-columns:minmax(0,1fr) 300px;
+    padding:14px;
+    gap:12px
+  }
+  .chat-container {
+    padding:18px
+  }
+  .composer-hint {
+    display:none
+  }
+}
+@media(max-width:1000px) {
+  .app-layout {
+    height:auto;
+    min-height:calc(100dvh - 69px);
+    flex-wrap:wrap;
+    align-content:flex-start;
+  }
+  .mobile-toolbar {
+    display:flex;
+    width:100%;
+    gap:8px;
+    padding:10px 16px;
+    background:#f7faf7;
+    border-bottom:1px solid var(--line)
+  }
+  .mobile-toolbar button {
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:12px;
+    padding:7px 12px;
+    color:#436450
+  }
+  .sidebar {
+    display:none;
+    width:100%;
+    max-height:45vh;
+    border-bottom:1px solid var(--line)
+  }
+  .sidebar-open .sidebar {
+    display:flex
+  }
+  .main-content {
+    grid-template-columns:minmax(0,1fr);
+    width:100%;
+    padding:12px
+  }
+  .chat-container {
+    height:calc(100dvh - 160px);
+    min-height:420px
+  }
+  .main-content :deep(.appointment-panel) {
+    display:none;
+    max-height:none
+  }
+  .appointments-open .main-content :deep(.appointment-panel) {
+    display:block
+  }
+  .appointments-open .chat-container {
+    display:none
+  }
+  .sidebar-heading h2 {
+    margin-bottom:12px
+  }
+}
+@media(max-width:640px) {
+  .main-content {
+    padding:8px
+  }
+  .chat-container {
+    height:calc(100dvh - 208px);
+    padding:16px 12px;
+    border-radius:12px;
+    min-height:430px
+  }
+  .chat-heading h1 {
+    font-size:17px
+  }
+  .scope-note {
+    font-size:11px
+  }
+  .welcome {
+    padding:20px 6px
+  }
+  .welcome-mark {
+    margin-bottom:15px
+  }
+  .welcome h2 {
+    font-size:24px
+  }
+  .quick-prompts {
+    margin:18px 0
+  }
+  .message {
+    font-size:14px;
+    padding:12px
+  }
+  .bot-message {
+    padding-left:0
+  }
+  .input-container {
+    padding:10px
+  }
+  .status {
+    font-size:10px
+  }
+  .user-message {
+    margin-left:10%
+  }
+  .composer-actions {
+    margin-top:8px
+  }
+  .mobile-toolbar {
+    padding:8px 12px
+  }
 }
 </style>

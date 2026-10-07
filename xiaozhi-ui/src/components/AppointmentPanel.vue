@@ -184,7 +184,7 @@ onBeforeUnmount(() => {
 <template>
   <aside class="appointment-panel" aria-label="演示预约管理">
     <section aria-labelledby="schedule-title">
-      <h2 id="schedule-title">医生与时段</h2>
+      <span class="eyebrow">预约准备</span><h2 id="schedule-title">医生与时段</h2>
       <p class="muted">虚构医院 DEMO001 · 内科。草稿不占号，预约需要单独确认。</p>
       <button :disabled="locked || loading" @click="refreshSchedules">刷新排班</button>
       <p v-if="schedules" class="muted">上海业务日期：{{ schedules.businessDate }}</p>
@@ -202,11 +202,11 @@ onBeforeUnmount(() => {
       </div>
       <article v-for="item in sessions" :key="item.sessionId" class="session-card">
         <strong>{{ item.doctorName }} · {{ item.slotName }}</strong>
-        <span class="badge">{{ bookingLabels[item.bookingStatus] }}</span>
+        <span class="badge" :class="item.bookingStatus.toLowerCase()">{{ bookingLabels[item.bookingStatus] }}</span>
         <p>{{ item.visitDate }} · {{ item.startTime.slice(0, 5) }}–{{ item.endTime.slice(0, 5) }}</p>
-        <p>参考可用名额：{{ item.referenceRemaining }}</p>
-        <p class="muted">本场剩余 {{ item.sessionRemaining }} / 容量 {{ item.totalCapacity }}；当天共享剩余 {{ item.dailyRemaining }}。</p>
-        <p class="muted">上海时间 {{ releaseTime(item.releaseAt) }} 放号</p>
+        <p class="availability">参考可用名额 <strong>{{ item.referenceRemaining }}</strong></p>
+        <details class="capacity-detail"><summary>容量与放号时间</summary><p class="muted">本场剩余 {{ item.sessionRemaining }} / 容量 {{ item.totalCapacity }}；当天共享剩余 {{ item.dailyRemaining }}。</p>
+        <p class="muted">上海时间 {{ releaseTime(item.releaseAt) }} 放号</p></details>
         <button :disabled="locked || loading || !fresh || !!pending || !draftAllowed(item)" @click="createDraft(item)">
           {{ item.bookingStatus === 'NOT_RELEASED' ? '先准备待确认草稿' : '选择此场次，生成草稿' }}
         </button>
@@ -241,7 +241,7 @@ onBeforeUnmount(() => {
         <p>{{ draft.hospitalId }} · {{ draft.timeZone }}</p>
         <p v-if="draft.session">{{ draft.session.doctorName }} · {{ draft.session.slotName }} {{ draft.session.startTime }}–{{ draft.session.endTime }}</p>
         <p v-else>旧版按日期预约，未指定医生和时段</p>
-        <p>{{ verified ? '查询时状态：' : '状态未重新核实：' }}{{ draftLabels[draft.status] }}</p>
+        <p class="draft-state" :class="draft.status.toLowerCase()">{{ verified ? '查询时状态：' : '状态未重新核实：' }}{{ draftLabels[draft.status] }}</p>
         <p class="identifier">{{ draft.draftId }}</p>
         <p v-if="draft.appointmentId" class="identifier">关联预约：{{ draft.appointmentId }}</p>
         <button @click="copyId(draft.draftId)">复制草稿编号</button>
@@ -252,29 +252,196 @@ onBeforeUnmount(() => {
         <button v-if="draft.status === 'CONFIRMED'" class="danger" :disabled="locked || !verified || !!pending" @click="prepare('cancelAppointment', draft)">取消已确认的演示预约</button>
         <p v-if="draft.status === 'CONFIRMING'" class="warning">确认处理中，请稍后同步，不要重复操作。</p>
       </article>
-      <p v-if="!drafts.length" class="muted">当前没有可展示的草稿。</p>
+      <div v-if="!drafts.length" class="draft-empty"><strong>尚无预约草稿</strong><p>选择一个演示场次，或在对话中说明需求。生成草稿后还需亲自确认。</p></div>
     </section>
   </aside>
 </template>
 
 <style scoped>
-.appointment-panel { padding: 20px; background: #fff; border-radius: 16px; max-height: calc(100vh - 40px); overflow-y: auto; }
-h2 { margin: 0 0 12px; font-size: 21px; } h3 { margin-top: 0; }
-p { line-height: 1.6; margin: 8px 0; }
-.muted { color: #60748c; font-size: 13px; }
-.warning { color: #935113; font-size: 13px; }
-.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
-label { font-size: 13px; } select { display: block; width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #cddbed; border-radius: 7px; background: #fff; }
-button { background: #edf3fb; color: #295783; padding: 9px 12px; margin: 5px 5px 0 0; border: 1px solid #d4e0f0; border-radius: 8px; cursor: pointer; font: inherit; font-size: 13px; }
-button:disabled { opacity: .5; cursor: not-allowed; }
-button:focus-visible, select:focus-visible { outline: 3px solid #7babee; outline-offset: 2px; }
-.primary { background: #2563d9; color: #fff; } .danger { background: #fff0ee; color: #a33126; }
-.session-card, .draft-card { border: 1px solid #d8e3f4; background: #f7faff; padding: 14px; border-radius: 12px; margin-top: 12px; font-size: 14px; }
-.badge { display: inline-block; margin-left: 8px; color: #536e8f; font-size: 12px; }
-.draft-section { border-top: 1px solid #dce5f2; margin-top: 24px; padding-top: 24px; }
-.identifier { overflow-wrap: anywhere; font-size: 12px; user-select: text; }
-.operation-notice { color: #365d88; font-size: 13px; overflow-wrap: anywhere; }
-.review, .pending-notice { background: #fff8e9; border: 1px solid #e4be79; border-radius: 12px; padding: 14px; margin-top: 14px; }
-@media (max-width: 1100px) { .appointment-panel { max-height: none; } }
-@media (max-width: 640px) { .appointment-panel { padding: 16px; } }
+.appointment-panel {
+  padding: 20px;
+  background: #fff;
+  border:1px solid var(--line);
+  border-radius: 16px;
+  max-height: 100%;
+  overflow-y: auto;
+}
+h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+h3 {
+  margin-top: 0;
+}
+p {
+  line-height: 1.6;
+  margin: 8px 0;
+}
+.muted {
+  color: #6d8070;
+  font-size: 13px;
+}
+.warning {
+  color: #935113;
+  font-size: 13px;
+}
+.filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0;
+}
+label {
+  font-size: 13px;
+}
+select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid #cddbed;
+  border-radius: 7px;
+  background: #fff;
+}
+button {
+  background: #eef5f0;
+  color: #426b54;
+  padding: 9px 12px;
+  margin: 5px 5px 0 0;
+  border: 1px solid #d6e2d8;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+button:focus-visible, select:focus-visible {
+  outline: 3px solid #25988d;
+  outline-offset: 2px;
+}
+.primary {
+  background: #087f75;
+  color: #fff;
+}
+.danger {
+  background: #fff0ee;
+  color: #a33126;
+}
+.session-card, .draft-card {
+  border: 1px solid #dde7dd;
+  background: #f8faf7;
+  padding: 14px;
+  border-radius: 10px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+.badge {
+  display: inline-block;
+  margin-left: 8px;
+  color: #6b806e;
+  font-size: 12px;
+}
+.draft-section {
+  border-top: 1px solid #dfe8df;
+  margin-top: 24px;
+  padding-top: 24px;
+}
+.identifier {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  user-select: text;
+}
+.operation-notice {
+  color: #436e53;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.review, .pending-notice {
+  background: #fff8e9;
+  border: 1px solid #e4be79;
+  border-radius: 12px;
+  padding: 14px;
+  margin-top: 14px;
+}
+@media (max-width: 1100px) {
+  .appointment-panel {
+    max-height: none;
+  }
+}
+@media (max-width: 640px) {
+  .appointment-panel {
+    padding: 16px;
+  }
+}
+.availability {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  color:#587462
+}
+.availability strong {
+  font-size:22px;
+  font-weight:600;
+  color:#247653
+}
+.badge {
+  padding:2px 7px;
+  border-radius:4px;
+  background:#eaf0e9;
+  margin:6px 0;
+  font-size:11px
+}
+.badge.available {
+  color:#23714d;
+  background:#e4f1e7
+}
+.capacity-detail {
+  font-size:11px;
+  color:#718471;
+  margin:8px 0
+}
+.capacity-detail summary {
+  cursor:pointer
+}
+.capacity-detail p {
+  font-size:11px
+}
+.draft-empty {
+  padding:22px 14px;
+  text-align:center;
+  border:1px dashed #d8e3d6;
+  background:#fafcf8;
+  border-radius:10px;
+  margin-top:16px;
+  color:#789077;
+  font-size:12px
+}
+.draft-empty strong {
+  font-size:13px;
+  font-weight:500
+}
+.draft-state {
+  font-size:12px;
+  color:#516e51
+}
+.draft-state.pending_confirmation {
+  color:#986621
+}
+.draft-state.confirmed {
+  color:#237750
+}
+.session-card>button {
+  width:100%;
+  margin:8px 0 0
+}
+.review {
+  border-color:#d5b363
+}
+.draft-section {
+  padding-top:20px;
+  margin-top:24px
+}
 </style>

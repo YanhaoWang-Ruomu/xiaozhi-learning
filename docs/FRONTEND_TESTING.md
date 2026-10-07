@@ -52,3 +52,8 @@ check-report.mjs要求四组分别至少17/8/10/6项且全部passed，缺报告/
 第四阶段留下的13项依赖告警已在后续修复中清零；重新npm ci后仍0项，41项测试与构建再次通过。
 CI新增包含开发依赖的审计检查并上传JSON。依赖修复提交cbe9c7c已完成云端验收，详见[DEPENDENCY_AUDIT.md](DEPENDENCY_AUDIT.md)。
 生产构建仍有大chunk提示；浏览器验收与新发现的离线迁移修复见[BROWSER_ACCEPTANCE.md](BROWSER_ACCEPTANCE.md)。账号、预约、刷新历史、等待阶段停止及可控部分流停止已复核。云模型存在耗时和ApiException波动，需继续处理；本轮修复提交后再验收CI，之后推进打包部署。
+
+
+## 2026-10-07更新
+
+前端49项、浏览器7项通过。新增断网事件处理、快捷输入、阅读位置保持和会话搜索回归；浏览器通过真实HTTP/SSE测试服务检查刷新恢复、预约复核和手机布局。命令与结果范围见UI_ACCEPTANCE.md。

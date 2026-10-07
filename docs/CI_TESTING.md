@@ -79,3 +79,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql.ps1 -Ja
 - 预期完整后端由历史88项增加至98项；本轮本机只运行新增10项并通过，尚未宣称98项完整套件已验收。前端41项和5个CI任务结构保持不变。
 - actionlint与PowerShell解析本机通过，云端待提交推送后验收。
 - 真实24题检索运行及指标边界见AI_EVALS.md；原始基线位于evals/baselines/vector-v1-20261006。
+
+
+## 2026-10-07：浏览器与OTLP
+
+本机后端122项、前端49项、Chromium浏览器7项通过。CI新增OtlpExportTest四项门禁和Playwright检查；使用独立HTTP测试服务，不调用模型和业务数据库。浏览器报告、失败trace及截图并入frontend-test-reports。部署边界见UI_ACCEPTANCE.md。

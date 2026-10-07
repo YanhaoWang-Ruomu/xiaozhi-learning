@@ -132,3 +132,46 @@ describe('ChatWindow user interactions with real Element Plus inputs', () => {
     expect(wrapper.find('appointment-panel-stub').exists()).toBe(false)
   })
 })
+
+it('offline pauses sends and reconnection reads history without replay', async () => {
+  await open()
+  window.dispatchEvent(new Event('offline'))
+  await flushPromises()
+  expect(wrapper.get('textarea').element.disabled).toBe(true)
+  expect(wrapper.get('[role="alert"]').text()).toContain('网络已断开')
+  window.dispatchEvent(new Event('online'))
+  await flushPromises()
+  expect(wrapper.get('textarea').element.disabled).toBe(false)
+  expect(streamChat).not.toHaveBeenCalled()
+  expect(fetchHistory).toHaveBeenCalledTimes(2)
+})
+it('quick prompts only fill and focus, never submit', async () => {
+  await open()
+  await wrapper.findAll('.quick-prompts button')[0].trigger('click')
+  expect(wrapper.get('textarea').element.value).toBe('你能提供哪些就医准备帮助？')
+  expect(document.activeElement).toBe(wrapper.get('textarea').element)
+  expect(streamChat).not.toHaveBeenCalled()
+})
+it('reading older messages does not jump on incoming tokens', async () => {
+  const pending = deferred()
+  let options
+  streamChat.mockImplementation(value => { options = value; return pending.promise })
+  await open(); await send()
+  const list = wrapper.get('.message-list').element
+  Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 2000 })
+  Object.defineProperty(list, 'clientHeight', { configurable: true, value: 500 })
+  list.scrollTop = 50
+  await wrapper.get('.message-list').trigger('scroll')
+  options.onEvent('token', { text: '新片段' }); await flushPromises()
+  expect(list.scrollTop).toBe(50)
+  await button(wrapper, '回到最新消息 ↓').trigger('click')
+  await flushPromises(); expect(list.scrollTop).toBe(2000)
+})
+it('conversation search filters loaded titles without a request', async () => {
+  fetchConversations.mockResolvedValue({ items: [conversation, { conversationId:'chat-2', title:'预约时段' }], nextCursor:null })
+  await open()
+  const count=fetchConversations.mock.calls.length
+  await wrapper.get('input[type="search"]').setValue('预约')
+  expect(wrapper.findAll('.conversation-choice').map(x=>x.text())).toEqual(['预约时段'])
+  expect(fetchConversations).toHaveBeenCalledTimes(count)
+})

@@ -54,3 +54,8 @@ MCP客户端使用`node`命令，参数为`F:\xiaozhi-learning\mcp\server.mjs`�
 打`v*`标签触发release工作流。发布前必须存在同一提交SHA在main分支成功的完整CI；随后构建前端、检查依赖和MCP、打包JAR、生成文件清单及ZIP SHA256，并发布GitHub Release。发布包监听本机；GitHub发布不等于公网网站已部署。服务器、域名/HTTPS与入口代理需要确定目标后再验收。
 
 旧版test-ai-retrieval.ps1固定验证vector管线，保留作历史对照；默认主聊天使用hybrid，当前方案比较应运行test-ai-engineering.ps1。
+
+
+## 导诊工作台更新
+
+2026-10-07补齐浏览器网络中断恢复和OTLP实际导出检查。OTLP支持通过XIAOZHI_OTEL_AUTHORIZATION设置鉴权头，云项目仍需配置并单独验收。新版界面、测试命令和边界见[UI_ACCEPTANCE.md](UI_ACCEPTANCE.md)。

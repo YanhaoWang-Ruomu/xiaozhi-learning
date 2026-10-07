@@ -8,7 +8,7 @@ for (const key of ['numFailedTests', 'numPendingTests', 'numTodoTests', 'numFail
 }
 const required = [
   ['chat-stream.test.js', 17],
-  ['ChatWindow.test.js', 8],
+  ['ChatWindow.test.js', 12],
   ['AppointmentPanel.test.js', 10],
   ['App.test.js', 6],
   ['EngineeringLab.test.js', 4],

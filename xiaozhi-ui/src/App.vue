@@ -1,6 +1,7 @@
 <script setup>
-import { onMounted, onBeforeUnmount, ref } from 'vue'
-import EngineeringLab from '@/components/EngineeringLab.vue'
+import { onMounted, onBeforeUnmount, ref, defineAsyncComponent } from 'vue'
+import './style.css'
+const EngineeringLab = defineAsyncComponent(() => import('@/components/EngineeringLab.vue'))
 import ChatWindow from '@/components/ChatWindow.vue'
 import { currentUser, login, register, logout, importBrowserHistory, resetCsrf, announceAuthChange } from '@/api/auth.js'
 import { readLegacyBrowserKey } from '@/api/browserIdentity.js'
@@ -16,7 +17,7 @@ const notice = ref('')
 const revision = ref(0)
 const legacyAvailable = ref(Boolean(readLegacyBrowserKey()))
 let generation = 0
-function expired() { generation++; user.value = null; password.value = ''; confirmation.value = ''; resetCsrf() }
+function expired() { generation++; user.value = null; showLab.value = false; password.value = ''; confirmation.value = ''; resetCsrf() }
 async function restore() {
   const ticket = ++generation
   checking.value = true
@@ -65,46 +66,42 @@ onMounted(() => { window.addEventListener('xiaozhi-auth-expired', expired); wind
 onBeforeUnmount(() => { window.removeEventListener('xiaozhi-auth-expired', expired); window.removeEventListener('storage', changed) })
 </script>
 <template>
-  <main v-if="checking" class="auth-card">正在检查登录状态……</main>
+  <main v-if="checking" class="auth-card loading-card" role="status">正在检查登录状态……</main>
   <template v-else-if="user">
-    <header class="account-bar"><span>当前账号：{{ user.username }}</span>
-      <button v-if="legacyAvailable" :disabled="busy" @click="importOld">导入本浏览器旧会话</button>
-      <button @click="showLab = !showLab">{{ showLab ? '返回聊天' : 'AI 工程实验室' }}</button>
-      <button :disabled="busy" @click="signOut">退出登录</button>
-      <span role="status">{{ notice }}</span>
+    <header class="account-bar">
+      <a class="wordmark" href="#main-workspace" @click.prevent="showLab = false"><span class="brand-mark" aria-hidden="true">✚</span><strong>小智</strong><span class="brand-subtitle">医疗导诊</span></a>
+      <span class="demo-pill">学习演示</span>
+      <nav class="workspace-nav" aria-label="工作区"><button :class="{ active: !showLab }" :aria-pressed="!showLab" @click="showLab = false">导诊工作台</button><button :class="{ active: showLab }" :aria-pressed="showLab" @click="showLab = true">AI 工程实验室</button></nav>
+      <div class="account-actions"><span class="account-name" :title="user.username"><span class="avatar" aria-hidden="true">{{ user.username.slice(0, 1).toUpperCase() }}</span>{{ user.username }}</span>
+        <button v-if="legacyAvailable" :disabled="busy" @click="importOld">导入本浏览器旧会话</button><button :disabled="busy" @click="signOut">退出登录</button></div>
     </header>
-    <EngineeringLab v-if="showLab" :key="user.userId" :user-id="user.userId" />
-    <ChatWindow v-show="!showLab" :key="user.userId + ':' + revision" :user-id="user.userId" />
+    <p v-if="notice" class="global-notice" role="status">{{ notice }}</p>
+    <div id="main-workspace">
+      <EngineeringLab v-if="showLab" :key="user.userId" :user-id="user.userId" />
+      <ChatWindow v-show="!showLab" :key="user.userId + ':' + revision" :user-id="user.userId" />
+    </div>
   </template>
-  <main v-else class="auth-card">
-    <h1>小智医疗导诊学习演示</h1>
-    <p>登录后查看自己的会话与演示预约。本系统不办理真实就医预约。</p>
-    <form @submit.prevent="submit">
-      <h2>{{ registering ? '注册账号' : '登录账号' }}</h2>
-      <label>用户名<input v-model="username" autocomplete="username" maxlength="32" required :disabled="busy" /></label>
-      <small>3到32位英文字母、数字或下划线，不区分大小写。</small>
-      <label>密码<input v-model="password" type="password" :autocomplete="registering ? 'new-password' : 'current-password'" minlength="12" maxlength="72" required :disabled="busy" /></label>
-      <small>至少12个字符，UTF-8长度不超过72字节。</small>
-      <label v-if="registering">确认密码<input v-model="confirmation" type="password" autocomplete="new-password" required :disabled="busy" /></label>
-      <p role="status">{{ notice }}</p>
-      <button type="submit" :disabled="busy">{{ busy ? '处理中……' : registering ? '注册' : '登录' }}</button>
-      <button type="button" :disabled="busy" @click="registering = !registering; password = ''; confirmation = ''; notice = ''">{{ registering ? '返回登录' : '创建账号' }}</button>
-      <button type="button" :disabled="busy" @click="restore">重新检查连接</button>
-    </form>
+  <main v-else class="login-layout">
+    <section class="login-intro" aria-label="小智介绍">
+      <div class="wordmark"><span class="brand-mark" aria-hidden="true">✚</span><strong>小智</strong><span>医疗导诊 · 学习演示</span></div>
+      <div class="intro-copy"><span class="eyebrow">从一个问题开始</span><h1>把就医准备，<br />一步步理清。</h1><p>交流就医需求，查阅资料，核对预约安排。<br />每一步都有清楚的依据与状态。</p>
+      <ol class="intro-steps"><li><span>01</span><div><strong>先聊需求</strong><p>用自然语言描述需要的帮助</p></div></li><li><span>02</span><div><strong>查看依据</strong><p>展开回复中的检索资料，核对来源</p></div></li><li><span>03</span><div><strong>亲自确认</strong><p>演示预约经核对后才会提交</p></div></li></ol></div>
+      <p class="login-boundary">不替代医生诊断，不办理真实就医预约。</p>
+    </section>
+    <section class="auth-card" aria-label="账号登录">
+      <span class="eyebrow">个人工作台</span><h2>{{ registering ? '创建你的账号' : '欢迎回来' }}</h2><p class="muted">登录后继续会话，查看自己的演示预约。</p>
+      <form @submit.prevent="submit">
+        <h3 class="sr-only">{{ registering ? '注册账号' : '登录账号' }}</h3>
+        <label>用户名<input v-model="username" autocomplete="username" maxlength="32" placeholder="输入用户名" required :disabled="busy" /></label>
+        <small>3–32位英文字母、数字或下划线，不区分大小写。</small>
+        <label>密码<input v-model="password" type="password" :autocomplete="registering ? 'new-password' : 'current-password'" minlength="12" maxlength="72" placeholder="输入密码" required :disabled="busy" /></label>
+        <small>至少12个字符，UTF-8长度不超过72字节。</small>
+        <label v-if="registering">确认密码<input v-model="confirmation" type="password" autocomplete="new-password" required :disabled="busy" /></label>
+        <p v-if="notice" class="form-notice" role="status">{{ notice }}</p>
+        <button class="login-submit" type="submit" :disabled="busy">{{ busy ? '处理中……' : registering ? '注册' : '登录' }}</button>
+        <div class="login-secondary"><button type="button" :disabled="busy" @click="registering = !registering; password = ''; confirmation = ''; notice = ''">{{ registering ? '返回登录' : '创建账号' }}</button><button type="button" :disabled="busy" @click="restore">重新检查连接</button></div>
+      </form>
+      <p class="auth-footer">会话与演示预约按账号保存。</p>
+    </section>
   </main>
 </template>
-<style>
-* { box-sizing: border-box; }
-html, body, #app { margin: 0; min-width: 320px; min-height: 100%; }
-body { font-family: 'Microsoft YaHei', system-ui, sans-serif; color: #26374b; background: #f4f7fb; line-height: 1.6; }
-button, input, textarea { font: inherit; }
-a { color: #245ecc; }
-.auth-card { max-width: 540px; margin: 6vh auto; background: white; padding: 28px; border-radius: 14px; }
-.auth-card h1 { font-size: 24px; }
-.auth-card label { display: block; margin-top: 16px; }
-.auth-card input { display: block; width: 100%; padding: 10px; border: 1px solid #b7c5d8; border-radius: 6px; }
-.auth-card small { color: #596a80; }
-.auth-card button, .account-bar button { padding: 8px 14px; margin: 6px; border: 1px solid #b7c5d8; border-radius: 6px; background: #eef4ff; cursor: pointer; }
-button:disabled { opacity: .6; cursor: wait; }
-.account-bar { display: flex; align-items: center; flex-wrap: wrap; padding: 6px 20px; background: white; border-bottom: 1px solid #dce4ee; gap: 10px; }
-</style>
