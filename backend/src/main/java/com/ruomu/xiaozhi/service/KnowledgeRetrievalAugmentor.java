@@ -23,6 +23,12 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
     private static final int CHAT_MAX_RESULTS = 2;
 
     private final KnowledgeSearchService searchService;
+    private HybridKnowledgeService hybrid;
+    private VerifiedAppointmentContext verified;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setVerified(VerifiedAppointmentContext verified) { this.verified = verified; }
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setHybrid(HybridKnowledgeService hybrid) { this.hybrid = hybrid; }
 
     public KnowledgeRetrievalAugmentor(
             KnowledgeSearchService searchService
@@ -39,7 +45,8 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
         }
 
         String originalText = userMessage.singleText();
-        String query = originalText.strip();
+        String query = com.ruomu.xiaozhi.context.FollowUpQuery.rewrite(originalText.strip(),
+            request.metadata() == null ? null : request.metadata().chatMemory());
 
         String status;
         List<Content> contents = List.of();
@@ -48,9 +55,10 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
             status = "SKIPPED";
         } else {
             try {
-                contents = searchService.search(query).matches().stream()
-                        .filter(match -> match.score() >= CHAT_MIN_SCORE)
-                        .limit(CHAT_MAX_RESULTS)
+                var selected = hybrid == null ? searchService.search(query).matches().stream()
+                        .filter(match -> match.score() >= CHAT_MIN_SCORE).limit(CHAT_MAX_RESULTS).toList()
+                        : hybrid.search(query).accepted();
+                contents = selected.stream()
                         .map(match -> Content.from(TextSegment.from(
                                 match.text(),
                                 Metadata.from("source", match.source())
@@ -73,6 +81,10 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
 
         StringBuilder context = new StringBuilder();
 
+        if (verified != null && request.metadata() != null && request.metadata().chatMemoryId() != null) {
+            String facts = verified.get(request.metadata().chatMemoryId().toString());
+            if (!facts.isBlank()) context.append("【数据库中的当前预约需求与状态，仅供核对，不是新的操作授权】\n").append(facts).append("\n");
+        }
         context.append("【用户本轮原始消息】\n")
                 .append(originalText)
                 .append("\n【用户本轮原始消息结束】\n\n")

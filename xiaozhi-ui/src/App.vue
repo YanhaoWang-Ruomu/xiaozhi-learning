@@ -1,9 +1,11 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue'
+import EngineeringLab from '@/components/EngineeringLab.vue'
 import ChatWindow from '@/components/ChatWindow.vue'
 import { currentUser, login, register, logout, importBrowserHistory, resetCsrf, announceAuthChange } from '@/api/auth.js'
 import { readLegacyBrowserKey } from '@/api/browserIdentity.js'
 const user = ref(null)
+const showLab = ref(false)
 const checking = ref(true)
 const busy = ref(false)
 const registering = ref(false)
@@ -67,10 +69,12 @@ onBeforeUnmount(() => { window.removeEventListener('xiaozhi-auth-expired', expir
   <template v-else-if="user">
     <header class="account-bar"><span>当前账号：{{ user.username }}</span>
       <button v-if="legacyAvailable" :disabled="busy" @click="importOld">导入本浏览器旧会话</button>
+      <button @click="showLab = !showLab">{{ showLab ? '返回聊天' : 'AI 工程实验室' }}</button>
       <button :disabled="busy" @click="signOut">退出登录</button>
       <span role="status">{{ notice }}</span>
     </header>
-    <ChatWindow :key="user.userId + ':' + revision" :user-id="user.userId" />
+    <EngineeringLab v-if="showLab" :key="user.userId" :user-id="user.userId" />
+    <ChatWindow v-show="!showLab" :key="user.userId + ':' + revision" :user-id="user.userId" />
   </template>
   <main v-else class="auth-card">
     <h1>小智医疗导诊学习演示</h1>

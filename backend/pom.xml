@@ -21,7 +21,13 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
+    <dependencyManagement><dependencies><dependency>
+        <groupId>io.opentelemetry</groupId><artifactId>opentelemetry-bom</artifactId><version>1.66.0</version><type>pom</type><scope>import</scope>
+    </dependency></dependencies></dependencyManagement>
     <dependencies>
+        <dependency><groupId>io.opentelemetry</groupId><artifactId>opentelemetry-sdk</artifactId><version>1.66.0</version></dependency>
+        <dependency><groupId>io.opentelemetry</groupId><artifactId>opentelemetry-exporter-otlp</artifactId><version>1.66.0</version></dependency>
+        <dependency><groupId>io.opentelemetry</groupId><artifactId>opentelemetry-sdk-testing</artifactId><version>1.66.0</version><scope>test</scope></dependency>
         <!-- 登录会话、密码哈希和CSRF防护；版本由Spring Boot管理 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

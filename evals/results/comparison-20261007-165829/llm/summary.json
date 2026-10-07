@@ -1,0 +1,14 @@
+{
+  "mode" : "llm",
+  "at" : "2026-10-07T06:07:04.916309600Z",
+  "datasetSha256" : "e0e8eae18a67dde3cd58ed6cedcf9db123187681943687cdde7a4413fa1784b7",
+  "planned" : 24,
+  "errors" : 0,
+  "fallbacks" : 10,
+  "positiveDenominator" : 20,
+  "negativeDenominator" : 4,
+  "acceptedRecall" : 0.95,
+  "negativeFalseAcceptance" : 0.0,
+  "meanDurationMsIncludingSampledAnswers" : 8624.666666666666,
+  "limits" : "Frozen v1 exact-quote regression, not held-out generalization or clinical accuracy. Answer samples require manual review."
+}

@@ -22,6 +22,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
+import com.ruomu.xiaozhi.observability.AiTelemetry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -85,14 +86,15 @@ public class ChatController {
         validate(request);
 
         String id = request.conversationId().strip();
-        try (Lease ignored = acquire(id)) {
+        try (Lease ignored = acquire(id); var trace = AiTelemetry.start("chat.sync"); var scope = trace.scope()) {
             ObjectId turn = history.begin(id, request.message().strip(), AccountUser.require(authentication).userId());
             try {
                 Result<String> result = assistant.chat(id, request.message().strip(), BusinessDateContext.now());
                 ChatResponse response = new ChatResponse(result.content(), collectDrafts(result.toolExecutions()), collectSources(result.sources()));
-                history.complete(turn, response);
+                AiTelemetry.call("history.save", () -> { history.complete(turn, response); return null; });
                 return response;
             } catch (RuntimeException e) {
+                trace.fail(e);
                 markInterrupted(turn);
                 throw e;
             }
@@ -125,7 +127,7 @@ public class ChatController {
 
         try {
             streamExecutor.execute(() -> {
-                try {
+                try (var scope = state.trace.scope()) {
                     if (state.closed.get()) {
                         state.failMessage("连接在模型启动前已关闭，本轮未完成。");
                         return;
@@ -214,6 +216,7 @@ public class ChatController {
         } catch (RuntimeException e) {
             markInterrupted(turn);
             lease.close();
+            state.trace.fail(e); state.trace.close();
 
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
@@ -434,6 +437,7 @@ public class ChatController {
 
     private final class StreamState {
 
+        private final AiTelemetry.Operation trace = AiTelemetry.start("chat.stream");
         private final SseEmitter emitter;
         private final Lease lease;
         private final ObjectId turn;
@@ -499,15 +503,17 @@ public class ChatController {
 
             try {
                 // 即使浏览器已断开，真实完成的回复也先持久化，再释放会话。
-                history.complete(turn, response);
+                AiTelemetry.call("history.save", () -> { history.complete(turn, response); return null; });
                 send("done", response);
             } catch (RuntimeException e) {
+                trace.fail(e);
                 markInterrupted(turn);
                 send("failed", Map.of("message", "回复未能完整保存，请同步历史和草稿核实，勿重复提交。"));
                 log.warn("历史保存失败，异常类型：{}", e.getClass().getSimpleName());
             } finally {
                 lease.close();
                 closeTransport();
+                trace.close();
             }
         }
 
@@ -518,6 +524,7 @@ public class ChatController {
                     error.getClass().getSimpleName()
             );
 
+            trace.fail(error);
             failMessage(
                     "本轮回复未完整取得，请先同步当前会话草稿核实；"
                             + "请求不会自动重发。"
@@ -530,10 +537,12 @@ public class ChatController {
                 return;
             }
 
+            trace.span.setStatus(io.opentelemetry.api.trace.StatusCode.ERROR);
             markInterrupted(turn);
             lease.close();
             send("failed", Map.of("message", message));
             closeTransport();
+            trace.close();
         }
     }
 }

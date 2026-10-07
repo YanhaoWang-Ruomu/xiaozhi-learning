@@ -50,6 +50,7 @@ public class AppointmentTools {
             """)
     public AppointmentRuleResponse queryAppointmentRule(
             @P("用户明确提供的医院编号") String hospitalId) {
+        return com.ruomu.xiaozhi.observability.AiTelemetry.call("tool.queryAppointmentRule", () -> {
 
         if (hospitalId == null || hospitalId.isBlank()) {
             return new AppointmentRuleResponse(
@@ -74,6 +75,8 @@ public class AppointmentTools {
         );
 
         return response;
+
+        });
     }
 
     @Tool("""
@@ -92,6 +95,7 @@ public class AppointmentTools {
     public AppointmentScheduleResponse queryAppointmentSchedules(
             @P("用户明确提供的医院编号") String hospitalId,
             @P("用户明确提供的科室") String department) {
+        return com.ruomu.xiaozhi.observability.AiTelemetry.call("tool.queryAppointmentSchedules", () -> {
 
         AppointmentScheduleResponse response =
                 scheduleService.findSchedules(hospitalId, department);
@@ -102,6 +106,8 @@ public class AppointmentTools {
         );
 
         return response;
+
+        });
     }
 
     @Tool("""
@@ -120,6 +126,7 @@ public class AppointmentTools {
     public Map<String, Object> queryAppointmentSessions(
             @P("用户明确提供的医院编号") String hospitalId,
             @P("用户明确提供的科室") String department) {
+        return com.ruomu.xiaozhi.observability.AiTelemetry.call("tool.queryAppointmentSessions", () -> {
 
         try {
             AppointmentSessionResponse response =
@@ -132,6 +139,8 @@ public class AppointmentTools {
             return invalidInput(exception.getReason() == null
                     ? "请提供医院编号和科室。" : exception.getReason());
         }
+
+        });
     }
 
     @Tool("""
@@ -155,6 +164,7 @@ public class AppointmentTools {
             @P("具体预约日期，yyyy-MM-dd；明确相对日期按本轮服务器日期表换算") String visitDate,
             @P("从最新场次查询结果中取得、匹配用户所选日期医生时段的sessionId") String sessionId,
             @ToolMemoryId String conversationId) {
+        return com.ruomu.xiaozhi.observability.AiTelemetry.call("tool.createAppointmentDraft", () -> {
 
         if (conversationId == null || conversationId.isBlank()) {
             return invalidInput(
@@ -247,6 +257,8 @@ public class AppointmentTools {
                             : reason
             );
         }
+
+        });
     }
 
     private Map<String, Object> invalidInput(String message) {

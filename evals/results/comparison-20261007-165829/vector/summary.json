@@ -1,0 +1,14 @@
+{
+  "mode" : "vector",
+  "at" : "2026-10-07T06:01:08.399921600Z",
+  "datasetSha256" : "e0e8eae18a67dde3cd58ed6cedcf9db123187681943687cdde7a4413fa1784b7",
+  "planned" : 24,
+  "errors" : 0,
+  "fallbacks" : 0,
+  "positiveDenominator" : 20,
+  "negativeDenominator" : 4,
+  "acceptedRecall" : 0.9,
+  "negativeFalseAcceptance" : 0.0,
+  "meanDurationMsIncludingSampledAnswers" : 6549.916666666667,
+  "limits" : "Frozen v1 exact-quote regression, not held-out generalization or clinical accuracy. Answer samples require manual review."
+}

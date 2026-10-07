@@ -1,0 +1,59 @@
+name: Verified GitHub release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Require green main CI on the exact release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&branch=main&status=success" --jq '.workflow_runs | length' > /tmp/passed
+          test "$(cat /tmp/passed)" -gt 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Check MCP and build production frontend
+        run: |
+          cd mcp
+          npm ci --ignore-scripts
+          npm test
+          npm audit --audit-level=low
+          cd ../xiaozhi-ui
+          npm ci
+          npm run test:ci
+          npm audit --audit-level=low
+          npm run build
+      - name: Package executable application and operating instructions
+        run: |
+          mvn -B -ntp -f backend/pom.xml -Prelease-ui -DskipTests package
+          mkdir -p release/mcp release/config
+          cp backend/target/backend-1.0-SNAPSHOT.jar release/xiaozhi.jar
+          cp deploy/start.ps1 release/
+          cp deploy/application.properties.example release/config/
+          cp -r deploy sql docs release/
+          cp mcp/*.mjs mcp/package*.json release/mcp/
+          printf '%s\n' "$(git rev-parse HEAD)" > release/COMMIT.txt
+          (cd release && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+          (cd release && zip -qr ../xiaozhi-${GITHUB_REF_NAME}.zip .)
+          sha256sum xiaozhi-${GITHUB_REF_NAME}.zip > xiaozhi-${GITHUB_REF_NAME}.zip.sha256
+      - name: Publish verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "xiaozhi-${GITHUB_REF_NAME}.zip" "xiaozhi-${GITHUB_REF_NAME}.zip.sha256" --verify-tag --title "小智 AI 工程演示 $GITHUB_REF_NAME" --notes-file docs/AI_RELEASE_NOTES.md

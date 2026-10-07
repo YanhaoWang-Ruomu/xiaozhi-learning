@@ -11,6 +11,7 @@ const required = [
   ['ChatWindow.test.js', 8],
   ['AppointmentPanel.test.js', 10],
   ['App.test.js', 6],
+  ['EngineeringLab.test.js', 4],
 ]
 for (const [file, minimum] of required) {
   const suite = report.testResults.find(item => item.name.replaceAll('\\', '/').endsWith('/tests/' + file))

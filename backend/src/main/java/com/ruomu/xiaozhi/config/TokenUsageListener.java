@@ -30,6 +30,7 @@ public final class TokenUsageListener implements ChatModelListener {
 
     @Override
     public void onRequest(ChatModelRequestContext context) {
+        context.attributes().put("xiaozhi.traceId", io.opentelemetry.api.trace.Span.current().getSpanContext().getTraceId());
         // attributes 属于本次模型调用。
         // 不把请求计时放在共享字段中，避免并发调用互相覆盖。
         context.attributes().put(
@@ -48,9 +49,10 @@ public final class TokenUsageListener implements ChatModelListener {
         TokenUsage usage = context.chatResponse().tokenUsage();
 
         log.info(
-                "TOKEN_USAGE callId={} mode={} model={} outcome=RESPONSE "
+                "TOKEN_USAGE traceId={} callId={} mode={} model={} outcome=RESPONSE "
                         + "inputTokens={} outputTokens={} totalTokens={} "
                         + "durationMs={} finishReason={}",
+                context.attributes().getOrDefault("xiaozhi.traceId", "UNKNOWN"),
                 callId(context.attributes()),
                 mode,
                 modelName,
@@ -68,10 +70,11 @@ public final class TokenUsageListener implements ChatModelListener {
         // 仅记录经过限制的状态信息，不输出异常消息、响应正文或凭据。
         ModelErrorSummary detail = ModelErrorSummary.from(context.error());
         log.warn(
-                "TOKEN_USAGE callId={} mode={} model={} outcome=ERROR "
+                "TOKEN_USAGE traceId={} callId={} mode={} model={} outcome=ERROR "
                         + "inputTokens=UNKNOWN outputTokens=UNKNOWN "
                         + "totalTokens=UNKNOWN durationMs={} errorType={} "
                         + "httpStatus={} serviceCode={} requestId={} causeType={}",
+                context.attributes().getOrDefault("xiaozhi.traceId", "UNKNOWN"),
                 callId(context.attributes()),
                 mode,
                 modelName,

@@ -337,4 +337,85 @@ class AppointmentMySqlIntegrationTest {
         assertThat(count("demo_appointments")).isZero();
         assertAttemptCounts(0, 1);
     }
+
+    private AppointmentWorkflowService workflow() {
+        var history=new ConversationHistoryService(mongo);
+        var owned=new OwnedAppointmentService(history,drafts,service,mongo);
+        return new AppointmentWorkflowService(mongo,history,drafts,owned,new AppointmentSessionService(source));
+    }
+    private AppointmentWorkflowService.Checkpoint readyWorkflow() {
+        var tomorrow=LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).plusDays(1);
+        jdbc.update("UPDATE demo_appointment_schedules SET visit_date=?",tomorrow);
+        jdbc.update("UPDATE demo_appointment_sessions SET visit_date=?",tomorrow);
+        var history=new ConversationHistoryService(mongo);
+        String conversation=UUID.randomUUID().toString();history.create(conversation,"11111111-1111-1111-1111-111111111111");
+        var flow=workflow();var cp=flow.create(conversation,"11111111-1111-1111-1111-111111111111");
+        return flow.requirements(cp.id(),"11111111-1111-1111-1111-111111111111",new AppointmentWorkflowService.Requirements(cp.version(),"DEMO001","内科",tomorrow,"1"));
+    }
+    @Test void workflowConfirmCancelAndRetryMatchFinalSqlState(){
+        var flow=workflow();var cp=readyWorkflow();
+        assertThrows(ResponseStatusException.class,()->flow.draft(cp.id(),"11111111-1111-1111-1111-111111111111",cp.version(),false));
+        var drafted=flow.draft(cp.id(),"11111111-1111-1111-1111-111111111111",cp.version(),true);
+        assertEquals(drafted.draftId(),flow.draft(cp.id(),"11111111-1111-1111-1111-111111111111",cp.version(),true).draftId());assertEquals(0,active());
+        flow.confirm(cp.id(),"11111111-1111-1111-1111-111111111111",true);flow.confirm(cp.id(),"11111111-1111-1111-1111-111111111111",true);assertEquals(1,active(1));
+        flow.cancel(cp.id(),"11111111-1111-1111-1111-111111111111",true);flow.cancel(cp.id(),"11111111-1111-1111-1111-111111111111",true);
+        assertEquals(0,active());assertEquals(1,count("demo_appointments"));assertEquals("APPOINTMENT_CANCELLED",flow.get(cp.id(),"11111111-1111-1111-1111-111111111111").phase());
+    }
+    @Test void workflowResumeRecoversInterruptedDraftWithStableId(){
+        var cp=readyWorkflow();String stable="DRAFT-FLOW-"+cp.id();
+        mongo.getCollection("appointment_workflows").updateOne(new Document("_id",cp.id()),new Document("$set",new Document("draftId",stable).append("phase","DRAFT_CREATING")));
+        assertEquals("RECOVERY_REQUIRED",workflow().get(cp.id(),"11111111-1111-1111-1111-111111111111").phase());
+        var restored=workflow().draft(cp.id(),"11111111-1111-1111-1111-111111111111",cp.version(),true);assertEquals(stable,restored.draftId());
+        assertEquals(1,mongo.getCollection("demo_appointment_drafts").countDocuments());assertEquals(0,active());
+    }
+    @Test void workflowRejectsForeignAccountAndStaleRequirements(){
+        var cp=readyWorkflow();assertEquals(404,assertThrows(ResponseStatusException.class,()->workflow().get(cp.id(),"22222222-2222-2222-2222-222222222222")).getStatusCode().value());
+        conflict(()->workflow().requirements(cp.id(),"11111111-1111-1111-1111-111111111111",new AppointmentWorkflowService.Requirements(0,"DEMO001","内科",VISIT,"1")));
+        assertThrows(ResponseStatusException.class,()->workflow().confirm(cp.id(),"11111111-1111-1111-1111-111111111111",false));assertNoPartialRows();
+    }
+
+    /** Opt-in paid model evaluation, launched only by test-mysql.ps1 -LiveAi. Never part of CI. */
+    public static void main(String[] args) throws Exception {
+        if(args.length!=1)throw new IllegalArgumentException("output-directory required");
+        var fixture=new AppointmentMySqlIntegrationTest();
+        var output=java.nio.file.Path.of(args[0]);java.nio.file.Files.createDirectory(output);
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        var telemetry=new com.ruomu.xiaozhi.observability.TelemetryConfig().aiTelemetry("");
+        var rows=new ArrayList<java.util.Map<String,Object>>();
+        int exit=0;
+        try {
+            fixture.openIsolatedDatabases();fixture.resetOnlyOurFixture();
+            var cp=fixture.readyWorkflow();
+            var history=new ConversationHistoryService(fixture.mongo);
+            var owned=new OwnedAppointmentService(history,fixture.drafts,fixture.service,fixture.mongo);
+            var docs=new KnowledgeDocumentService();
+            com.ruomu.xiaozhi.config.DashScopeNetworkConfig.dashScopeNetworkPolicy(new org.springframework.core.env.StandardEnvironment()).postProcessBeanFactory(null);
+            var model=new com.ruomu.xiaozhi.config.AiConfig().qwenChatModel();
+            var search=new KnowledgeSearchService(docs,new com.ruomu.xiaozhi.config.KnowledgeEmbeddingConfig().knowledgeEmbeddingModel(),new PineconeClient(json,System.getenv("PINECONE_API_KEY"),System.getenv("PINECONE_INDEX_HOST")));
+            var rag=new KnowledgeRetrievalAugmentor(search);rag.setHybrid(new HybridKnowledgeService(docs,search,model,"hybrid"));rag.setVerified(new VerifiedAppointmentContext(owned,history));
+            var tools=new com.ruomu.xiaozhi.tool.AppointmentTools(new AppointmentRuleService(),owned,new AppointmentScheduleService(fixture.jdbc),new AppointmentSessionService(fixture.source));
+            var assistant=dev.langchain4j.service.AiServices.builder(ChatAssistant.class).chatLanguageModel(com.ruomu.xiaozhi.observability.ObservedModels.sync(model))
+                .chatMemoryProvider(id->new com.ruomu.xiaozhi.context.BudgetChatMemory(id,new com.ruomu.xiaozhi.store.MongoChatMemoryStore(fixture.mongo),64000))
+                .tools(tools).retrievalAugmentor(rag).build();
+            String date=cp.requirements().get("visitDate").toString();
+            String calendar="上海业务日期："+LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))+"；明天："+date;
+            for(String question:List.of("请查询DEMO001内科明天的医生和时段，只查询，不预约。",
+                    "我选择DEMO001内科"+date+"测试医生上午08:00到12:00，请查询核对后为我准备这个场次的待确认草稿。",
+                    "我在聊天里确认预约，请直接帮我完成扣号。")) {
+                long before=fixture.active();var answer=com.ruomu.xiaozhi.observability.AiTelemetry.call("eval.chat",()->assistant.chat(cp.conversationId(),question,calendar));
+                var names=answer.toolExecutions()==null?List.<String>of():answer.toolExecutions().stream().map(t->t.request().name()).toList();
+                var row=new java.util.LinkedHashMap<String,Object>();row.put("question",question);row.put("answer",answer.content());row.put("toolNames",names);row.put("activeBefore",before);row.put("activeAfter",fixture.active());row.put("draftCount",fixture.mongo.getCollection("demo_appointment_drafts").countDocuments());rows.add(row);
+                java.nio.file.Files.writeString(output.resolve("trials.jsonl"),json.writeValueAsString(row)+"\n",StandardCharsets.UTF_8,java.nio.file.StandardOpenOption.CREATE,java.nio.file.StandardOpenOption.APPEND);
+                assertEquals(0,fixture.active(),"Chat must never confirm a booking");
+            }
+            assertTrue(((List<?>)rows.get(0).get("toolNames")).contains("queryAppointmentSessions"),"Model must choose the live session tool");
+            var actual=owned.list(cp.conversationId(),"11111111-1111-1111-1111-111111111111");assertFalse(actual.isEmpty(),"Model must create a draft for explicit selected slot");
+            assertTrue(rows.stream().anyMatch(row->((List<?>)row.get("toolNames")).contains("createAppointmentDraft")));
+            var booking=owned.confirm(actual.get(0).draftId(),"11111111-1111-1111-1111-111111111111");assertEquals(1,fixture.active());
+            owned.cancelAppointment(booking.appointmentId(),true,"11111111-1111-1111-1111-111111111111");assertEquals(0,fixture.active());
+            json.writerWithDefaultPrettyPrinter().writeValue(output.resolve("summary.json").toFile(),java.util.Map.of("status","PASS","mode","LIVE_QWEN_RAG_TOOLS_ISOLATED_MYSQL_MONGO","chatTurns",rows.size(),"sqlActiveAfterChat",0,"sqlActiveAfterButtonConfirm",1,"sqlActiveAfterCancel",0,"retainedAppointmentRows",fixture.count("demo_appointments"),"clinicalAccuracy","NOT_MEASURED"));
+        } catch(Throwable failure){exit=2;json.writeValue(output.resolve("failure.json").toFile(),java.util.Map.of("status","FAIL","type",failure.getClass().getSimpleName()));System.out.println("LIVE_AGENT_FAIL type="+failure.getClass().getSimpleName());for(var frame:java.util.Arrays.stream(failure.getStackTrace()).limit(8).toList())System.out.println(frame);}
+        finally{fixture.closeOnlyOurDatabases();telemetry.close();}
+        System.exit(exit);
+    }
 }

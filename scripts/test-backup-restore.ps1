@@ -90,8 +90,9 @@ try{
  $app=Launch $java ((AppArgs 13307 27317)+@('--server.port=18081')) 'source-app'
  WaitPort 18081 $app
  Run $NodeCommand @("$repo\scripts\backup-restore-probe.mjs",'seed','18081',"$work\fixture.json") 'seed-api'
+ Run $NodeCommand @("$repo\mcp\live-probe.mjs","$work\fixture.json",'18081') 'mcp-authenticated-read'
  StopOwned $app
- Snapshot 'seed-memory' 13307 27317 "$work\fixture.json" 'seed-history'
+ Snapshot 'seed-memory'  13307 27317 "$work\fixture.json" 'seed-history'
  Snapshot 'snapshot' 13307 27317 "$work\source.json" 'snapshot-source'
  Run $mysqldump ((SqlArgs 13307)+@('--single-transaction','--quick','--no-tablespaces','--set-gtid-purged=OFF',"--result-file=$work\mysql.sql",'--databases','xiaozhi_learning')) 'dump-mysql'
  Run "$MongoTools\mongodump.exe" @('--uri=mongodb://127.0.0.1:27317','--db=xiaozhi_learning',"--archive=$work\mongo.archive.gz",'--gzip') 'dump-mongo'

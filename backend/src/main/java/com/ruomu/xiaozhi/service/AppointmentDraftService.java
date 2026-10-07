@@ -47,7 +47,7 @@ public class AppointmentDraftService {
     public AppointmentDraftResponse createDraft(
             CreateAppointmentRequest request) {
 
-        return insertDraft(request, null);
+        return insertDraft(request, null, null);
     }
 
     public AppointmentDraftResponse createDraft(
@@ -55,12 +55,28 @@ public class AppointmentDraftService {
             String conversationId) {
 
         String normalizedId = requireConversationId(conversationId);
-        return insertDraft(request, normalizedId);
+        return insertDraft(request, normalizedId, null);
     }
 
+    AppointmentDraftResponse createWorkflowDraft(CreateAppointmentRequest request, String conversationId, String stableId) {
+        if (stableId == null || !stableId.matches("DRAFT-FLOW-[0-9a-f-]{36}")) throw new IllegalArgumentException("Invalid workflow id");
+        return insertDraft(request, requireConversationId(conversationId), stableId);
+    }
     private AppointmentDraftResponse insertDraft(
             CreateAppointmentRequest request,
-            String conversationId) {
+            String conversationId, String stableId) {
+        if (stableId != null) {
+            Document existing = collection.find(eq("_id", stableId)).first();
+            if (existing != null) {
+                if (!java.util.Objects.equals(conversationId, existing.getString("conversationId")) ||
+                    !java.util.Objects.equals(request.sessionId(), existing.getString("sessionId")) ||
+                    !java.util.Objects.equals(request.visitDate().toString(), existing.getString("visitDate")) ||
+                    !java.util.Objects.equals(request.hospitalId(), existing.getString("hospitalId")) ||
+                    !java.util.Objects.equals(request.department(), existing.getString("department")))
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "恢复参数与原草稿不一致");
+                return toResponse(existing);
+            }
+        }
 
         // 草稿只检查医院、科室和日期范围，
         // 不要求已经放号。
@@ -73,7 +89,7 @@ public class AppointmentDraftService {
         String hospitalId = normalize(request.hospitalId());
         String department = normalize(request.department());
         LocalDate visitDate = request.visitDate();
-        String draftId = "DRAFT-" + UUID.randomUUID();
+        String draftId = stableId == null ? "DRAFT-" + UUID.randomUUID() : stableId;
 
         Document document = new Document("_id", draftId)
                 .append("status", "PENDING_CONFIRMATION")
@@ -96,7 +112,11 @@ public class AppointmentDraftService {
                     .append("startTime", session.startTime())
                     .append("endTime", session.endTime());
         }
-        collection.insertOne(document);
+        try { collection.insertOne(document); }
+        catch (com.mongodb.MongoWriteException e) {
+            if (stableId == null || e.getError().getCode() != 11000) throw e;
+            return insertDraft(request, conversationId, stableId);
+        }
         return toResponse(document);
     }
 

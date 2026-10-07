@@ -1,0 +1,10 @@
+{
+  "clinicalAccuracy" : "NOT_MEASURED",
+  "chatTurns" : 3,
+  "sqlActiveAfterChat" : 0,
+  "status" : "PASS",
+  "mode" : "LIVE_QWEN_RAG_TOOLS_ISOLATED_MYSQL_MONGO",
+  "sqlActiveAfterCancel" : 0,
+  "retainedAppointmentRows" : 1,
+  "sqlActiveAfterButtonConfirm" : 1
+}

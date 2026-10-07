@@ -88,14 +88,10 @@ public class AiConfig {
             KnowledgeRetrievalAugmentor knowledgeRetrievalAugmentor) {
 
         return AiServices.builder(ChatAssistant.class)
-                .chatLanguageModel(model)
-                .streamingChatLanguageModel(streamingModel)
+                .chatLanguageModel(com.ruomu.xiaozhi.observability.ObservedModels.sync(model))
+                .streamingChatLanguageModel(com.ruomu.xiaozhi.observability.ObservedModels.streaming(streamingModel))
                 .chatMemoryProvider(conversationId ->
-                        MessageWindowChatMemory.builder()
-                                .id(conversationId)
-                                .maxMessages(20)
-                                .chatMemoryStore(memoryStore)
-                                .build()
+                        new com.ruomu.xiaozhi.context.BudgetChatMemory(conversationId, memoryStore, 64000)
                 )
                 .tools(appointmentTools)
                 .retrievalAugmentor(knowledgeRetrievalAugmentor)

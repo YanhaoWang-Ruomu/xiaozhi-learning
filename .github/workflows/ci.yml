@@ -2,7 +2,7 @@ name: Project checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, "integration/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -60,10 +60,11 @@ jobs:
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
-          suites = [('security.AccountIsolationTest', 1), ('service.AppointmentMySqlIntegrationTest', 16),
+          suites = [('security.AccountIsolationTest', 1), ('service.AppointmentMySqlIntegrationTest', 19),
                     ('controller.ChatControllerStreamTest', 27), ('security.AccountSecurityConfigTest', 2),
                     ('config.DashScopeNetworkConfigTest', 3), ('config.ModelErrorSummaryTest', 5),
-                    ('config.DashScopeIdleTimeoutTest', 1), ('eval.RetrievalEvalTest', 10)]
+                    ('config.DashScopeIdleTimeoutTest', 1), ('eval.RetrievalEvalTest', 10), ('context.ContextEngineeringTest', 7),
+                    ('service.HybridKnowledgeTest', 7), ('observability.TracingTest', 3)]
           for suite, minimum in suites:
               report = ET.parse(f'backend/target/surefire-reports/TEST-com.ruomu.xiaozhi.{suite}.xml').getroot()
               assert int(report.attrib['tests']) >= minimum, f'{suite}: tests missing'
@@ -125,6 +126,9 @@ jobs:
       - run: npm run test:ci
       - name: Audit frontend dependencies (runtime and development)
         run: npm audit --json --audit-level=low > test-results/npm-audit.json
+      - name: Test read-only MCP protocol and dependency audit
+        working-directory: mcp
+        run: npm ci --ignore-scripts && npm test && npm audit --audit-level=low
       - run: npm run build
       - uses: actions/setup-java@v5
         with:

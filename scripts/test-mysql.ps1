@@ -1,4 +1,5 @@
 param(
+    [switch]$LiveAi,
     [string]$MySqlHome = "$env:ProgramFiles\MySQL\MySQL Server 8.4",
     [string]$JavaHome = $env:JAVA_HOME,
     [string]$MavenCommand = 'mvn.cmd',
@@ -58,6 +59,21 @@ try {
         $ErrorActionPreference = 'Continue'
         & $mavenExe '-Dxiaozhi.auth.integration=true' '-Dxiaozhi.mysql.integration=true' verify *> "$work\maven.log"
         $result = $LASTEXITCODE
+        if ($result -eq 0 -and $LiveAi) {
+            foreach ($name in @('DASHSCOPE_API_KEY','PINECONE_API_KEY','PINECONE_INDEX_HOST')) {
+                $value = [Environment]::GetEnvironmentVariable($name,'User')
+                if (!$value) { throw "Missing live evaluation variable: $name" }
+                [Environment]::SetEnvironmentVariable($name,$value,'Process')
+            }
+            & $mavenExe '-q' 'dependency:build-classpath' '-Dmdep.outputFile=target/live-classpath.txt' '-Dmdep.includeScope=test'
+            if ($LASTEXITCODE -ne 0) { throw 'Could not build evaluation classpath' }
+            $cp = 'target/classes;target/test-classes;' + (Get-Content -Raw -Encoding UTF8 target/live-classpath.txt).Trim()
+            $out = Join-Path $PSScriptRoot ('../evals/results/live-agent-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+            New-Item -ItemType Directory (Split-Path $out) -Force | Out-Null
+            & (Join-Path $JavaHome 'bin/java.exe') '-cp' $cp 'com.ruomu.xiaozhi.service.AppointmentMySqlIntegrationTest' $out *> "$work/live-ai.log"
+            $result = $LASTEXITCODE
+            Get-Content "$work/live-ai.log" -Tail 15
+        }
         $ErrorActionPreference = 'Stop'
         Get-Content "$work\maven.log" -Tail 30
     } finally { Pop-Location }
