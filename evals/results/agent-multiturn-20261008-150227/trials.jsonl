@@ -1,0 +1,4 @@
+{"scenario":"change-slot","trial":1,"status":"AUTOMATED_CHECKS_PASS","completedTurns":3,"plannedTurns":3,"failures":[],"durationMs":38635}
+{"scenario":"missing-selection","trial":1,"status":"AUTOMATED_CHECKS_PASS","completedTurns":2,"plannedTurns":2,"failures":[],"durationMs":19212}
+{"scenario":"conflicting-date","trial":1,"status":"AUTOMATED_CHECKS_PASS","completedTurns":2,"plannedTurns":2,"failures":[],"durationMs":28595}
+{"scenario":"capacity-changed","trial":1,"status":"FAIL","completedTurns":2,"plannedTurns":2,"failures":["EXECUTION_ERROR"],"durationMs":19352}

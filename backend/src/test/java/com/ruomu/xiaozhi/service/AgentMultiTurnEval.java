@@ -99,7 +99,7 @@ public final class AgentMultiTurnEval {
                 var queryContext=new AppointmentQueryContext();
                 var rag=new KnowledgeRetrievalAugmentor(search);rag.setQueryContext(queryContext);rag.setVerified(new VerifiedAppointmentContext(owned,history));
                 var tools=new AppointmentTools(new AppointmentRuleService(),owned,new AppointmentScheduleService(db.jdbc),sessions,queryContext);
-                var assistant=AiServices.builder(ChatAssistant.class).chatLanguageModel(model)
+                var assistant=AiServices.builder(ChatAssistant.class).chatLanguageModel(StagedAppointmentModels.sync(model))
                     .chatMemoryProvider(id->new com.ruomu.xiaozhi.context.BudgetChatMemory(id,new com.ruomu.xiaozhi.store.MongoChatMemoryStore(db.mongo),64000))
                     .maxSequentialToolsInvocations(4).tools(tools).retrievalAugmentor(rag).build();
                 var errors=new ArrayList<String>();int completed=0;long start=System.nanoTime();
