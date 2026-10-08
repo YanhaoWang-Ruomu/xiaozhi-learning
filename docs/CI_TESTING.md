@@ -97,3 +97,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql.ps1 -Ja
 ### 2026-10-08 按阶段开放工具
 
 新增 StagedAppointmentModelsTest 19 项并加入 CI 报告检查，完整后端共 174 项。同步与流式入口均验证阶段过滤和执行前拦截；真实同步模型固定六组、11 轮本次全部通过。失败首轮与成功复测报告均保留，真实流式和回答语义不包含在此次自动通过结论中。
+
+### 2026-10-08 回答与流式评测回归
+
+增加 AgentAnswerChecksTest 11项、AgentEvalResponseTest 6项，检查已知回答问题、流式片段采集、工具结果保存、异常与超时。完整后端191项通过，CI要求两组报告存在且零失败、零错误、零跳过。CI不访问付费模型；真实同步复测因Arrearage停止，真实流式待账户恢复，详见AGENT_MULTITURN_EVALS.md。

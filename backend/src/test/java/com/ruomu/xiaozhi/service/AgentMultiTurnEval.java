@@ -61,7 +61,9 @@ public final class AgentMultiTurnEval {
         Files.writeString(path,JSON.writeValueAsString(value)+"\n",StandardCharsets.UTF_8,StandardOpenOption.CREATE,StandardOpenOption.APPEND);
     }
     public static void main(String[] args) throws Exception {
-        if(args.length!=3)throw new IllegalArgumentException("output-directory trials scenario-ids|all");
+        if(args.length<3||args.length>4)throw new IllegalArgumentException("output-directory trials scenario-ids|all [SYNC|STREAM]");
+        String transport=args.length==4?args[3]:"SYNC";
+        if(!Set.of("SYNC","STREAM").contains(transport))throw new IllegalArgumentException("Unknown transport");
         int repetitions=Integer.parseInt(args[1]);
         if(repetitions<1||repetitions>3)throw new IllegalArgumentException("Trials must be 1..3");
         byte[] dataset;
@@ -75,6 +77,7 @@ public final class AgentMultiTurnEval {
         summary.put("plannedTrials",selected.size()*repetitions); summary.put("selectedScenarios",selected.stream().map(Scenario::id).toList());
         summary.put("repetitions",repetitions);summary.put("plannedTurns",selected.stream().mapToInt(c->c.turns().size()).sum()*repetitions);
         summary.put("answerReview","PENDING_MANUAL_REVIEW");
+        summary.put("transport",transport);summary.put("answerChecksVersion","known-regressions-v1");
         summary.put("limits","Controlled retrieval; no Pinecone quality score. Tool failure is injected. One trial cannot measure stability. No clinical accuracy claim.");
         JSON.writerWithDefaultPrettyPrinter().writeValue(output.resolve("manifest.json").toFile(),summary);
         var results=new ArrayList<Map<String,Object>>(); int exit=0;
@@ -83,7 +86,9 @@ public final class AgentMultiTurnEval {
         try {
             db.openIsolatedDatabases();
             DashScopeNetworkConfig.dashScopeNetworkPolicy(new StandardEnvironment()).postProcessBeanFactory(null);
-            var model=new AiConfig().qwenChatModel();
+            var config=new AiConfig();
+            var model=config.qwenChatModel();
+            var streamingModel="STREAM".equals(transport)?config.qwenStreamingChatModel():null;
             for(var scenario:selected)for(int repetition=1;repetition<=repetitions;repetition++) {
                 db.resetOnlyOurFixture();var cp=db.readyWorkflow();
                 var history=new ConversationHistoryService(db.mongo);
@@ -99,20 +104,31 @@ public final class AgentMultiTurnEval {
                 var queryContext=new AppointmentQueryContext();
                 var rag=new KnowledgeRetrievalAugmentor(search);rag.setQueryContext(queryContext);rag.setVerified(new VerifiedAppointmentContext(owned,history));
                 var tools=new AppointmentTools(new AppointmentRuleService(),owned,new AppointmentScheduleService(db.jdbc),sessions,queryContext);
-                var assistant=AiServices.builder(ChatAssistant.class).chatLanguageModel(StagedAppointmentModels.sync(model))
+                var builder=AiServices.builder(ChatAssistant.class).chatLanguageModel(StagedAppointmentModels.sync(model))
                     .chatMemoryProvider(id->new com.ruomu.xiaozhi.context.BudgetChatMemory(id,new com.ruomu.xiaozhi.store.MongoChatMemoryStore(db.mongo),64000))
-                    .maxSequentialToolsInvocations(4).tools(tools).retrievalAugmentor(rag).build();
+                    .maxSequentialToolsInvocations(4).tools(tools).retrievalAugmentor(rag);
+                if(streamingModel!=null)builder.streamingChatLanguageModel(StagedAppointmentModels.streaming(streamingModel));
+                var assistant=builder.build();
                 var errors=new ArrayList<String>();int completed=0;long start=System.nanoTime();
                 for(int index=0;index<scenario.turns().size();index++) {
                     var turn=scenario.turns().get(index);
                     var row=new LinkedHashMap<String,Object>();row.put("scenario",scenario.id());row.put("trial",repetition);row.put("turn",index+1);row.put("message",turn.message());
                     long turnStart=System.nanoTime();
                     try {
-                        var answer=assistant.chat(cp.conversationId(),turn.message(),BusinessDateContext.now());
+                        var answer=AgentEvalResponse.call(assistant,cp.conversationId(),turn.message(),BusinessDateContext.now(),transport);
                         var names=answer.toolExecutions()==null?List.<String>of():answer.toolExecutions().stream().map(t->t.request().name()).toList();
                         var drafts=db.mongo.getCollection("demo_appointment_drafts").find(new org.bson.Document("conversationId",cp.conversationId())).into(new ArrayList<>());
                         var failures=new ArrayList<>(grade(turn,names,drafts,db.active(),answer.content()));
                         if("SESSION_QUERY_FAILURE".equals(scenario.fault())&&faults.get()==0)failures.add("EXPECTED_TOOL_FAULT_NOT_REACHED");
+                        var answerFailures=AgentAnswerChecks.review(scenario.id(),index+1,answer.content());
+                        failures.addAll(answerFailures);
+                        row.put("answerCheckFailures",answerFailures);
+                        if("STREAM".equals(transport)) {
+                            row.put("partialCount",answer.partialCount());row.put("streamedText",answer.streamedText());
+                            if(answer.partialCount()==0)failures.add("NO_STREAM_PARTIALS");
+                            var surfaceFailures=AgentAnswerChecks.surface(answer.streamedText());
+                            row.put("streamSurfaceFailures",surfaceFailures);failures.addAll(surfaceFailures);
+                        }
                         errors.addAll(failures);
                         row.put("answer",answer.content());row.put("toolExecutions",answer.toolExecutions()==null?List.of():answer.toolExecutions().stream().map(t->Map.of("name",t.request().name(),"arguments",t.request().arguments(),"result",t.result())).toList());
                         if(answer.tokenUsage()!=null)row.put("tokenUsage",Map.of("input",answer.tokenUsage().inputTokenCount(),"output",answer.tokenUsage().outputTokenCount(),"total",answer.tokenUsage().totalTokenCount()));
@@ -120,7 +136,8 @@ public final class AgentMultiTurnEval {
                     } catch(RuntimeException e) {
                         row.put("errorType",e.getClass().getSimpleName());
                         if("SESSION_QUERY_FAILURE".equals(scenario.fault())&&faults.get()>0&&db.active()==0&&db.mongo.getCollection("demo_appointment_drafts").countDocuments()==0) {
-                            row.put("status","EXPECTED_TOOL_ERROR_PROPAGATED");row.put("answerReview","NO_ANSWER_EXCEPTION_PROPAGATED");
+                            errors.add("QUERY_FAILURE_WITHOUT_ANSWER");
+                            row.put("status","FAIL");row.put("answerReview","NO_ANSWER_EXCEPTION_PROPAGATED");
                         } else {errors.add("EXECUTION_ERROR");row.put("status","ERROR");}
                     }
                     row.put("activeAppointments",db.active());row.put("retainedAppointments",db.count("demo_appointments"));row.put("faultInvocations",faults.get());

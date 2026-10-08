@@ -1,0 +1,1 @@
+{"scenario":"change-slot","trial":1,"turn":1,"message":"请查询DEMO001内科明天测试医生的上午时段，只查询，先不要准备草稿。","errorType":"ApiException","status":"ERROR","activeAppointments":0,"retainedAppointments":0,"faultInvocations":0,"durationMs":3989}

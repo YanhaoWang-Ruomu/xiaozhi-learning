@@ -1,0 +1,9 @@
+{
+  "diagnostic": "Minimal Qwen request after failed first evaluation turn",
+  "httpStatus": 400,
+  "serviceCode": "Arrearage",
+  "result": "PROVIDER_ACCOUNT_BLOCKED",
+  "syncEvaluation": "FAIL_OR_INCOMPLETE",
+  "streamEvaluation": "NOT_RUN",
+  "credentialsLogged": false
+}

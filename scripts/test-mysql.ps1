@@ -1,6 +1,7 @@
 param(
     [switch]$LiveAi,
     [switch]$MultiTurnAi,
+    [ValidateSet('SYNC','STREAM')][string]$AgentTransport = 'SYNC',
     [ValidateRange(1,3)][int]$AgentTrials = 1,
     [string]$AgentScenarios = 'all',
     [string]$MySqlHome = "$env:ProgramFiles\MySQL\MySQL Server 8.4",
@@ -12,6 +13,7 @@ param(
 # Starts only a disposable loopback instance. Never reads the business MySQL configuration/password.
 $ErrorActionPreference = 'Stop'
 if ($LiveAi -and $MultiTurnAi) { throw 'Choose only one live evaluation mode.' }
+if ($AgentTransport -eq 'STREAM' -and !$MultiTurnAi) { throw 'STREAM requires -MultiTurnAi.' }
 $serverExe = Join-Path $MySqlHome 'bin\mysqld.exe'
 $adminExe = Join-Path $MySqlHome 'bin\mysqladmin.exe'
 if (!(Test-Path $serverExe) -or !(Test-Path $adminExe)) { throw 'MySQL 8.4 binaries not found; pass -MySqlHome.' }
@@ -73,11 +75,11 @@ try {
             & $mavenExe '-q' 'dependency:build-classpath' '-Dmdep.outputFile=target/live-classpath.txt' '-Dmdep.includeScope=test'
             if ($LASTEXITCODE -ne 0) { throw 'Could not build evaluation classpath' }
             $cp = 'target/classes;target/test-classes;' + (Get-Content -Raw -Encoding UTF8 target/live-classpath.txt).Trim()
-            $prefix = if ($MultiTurnAi) { 'agent-multiturn-' } else { 'live-agent-' }
+            $prefix = if ($MultiTurnAi) { 'agent-multiturn-' + $AgentTransport.ToLowerInvariant() + '-' } else { 'live-agent-' }
             $out = Join-Path $PSScriptRoot ('../evals/results/' + $prefix + (Get-Date -Format 'yyyyMMdd-HHmmss'))
             New-Item -ItemType Directory (Split-Path $out) -Force | Out-Null
             if ($MultiTurnAi) {
-                & (Join-Path $JavaHome 'bin/java.exe') '-cp' $cp 'com.ruomu.xiaozhi.service.AgentMultiTurnEval' $out $AgentTrials $AgentScenarios *> "$work/live-ai.log"
+                & (Join-Path $JavaHome 'bin/java.exe') '-cp' $cp 'com.ruomu.xiaozhi.service.AgentMultiTurnEval' $out $AgentTrials $AgentScenarios $AgentTransport *> "$work/live-ai.log"
             } else {
                 & (Join-Path $JavaHome 'bin/java.exe') '-cp' $cp 'com.ruomu.xiaozhi.service.AppointmentMySqlIntegrationTest' $out *> "$work/live-ai.log"
             }
