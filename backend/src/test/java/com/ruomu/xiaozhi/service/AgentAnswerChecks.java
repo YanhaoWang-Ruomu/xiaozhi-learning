@@ -13,7 +13,7 @@ final class AgentAnswerChecks {
     static List<String> surface(String answer) {
         if(answer==null||answer.isBlank())return List.of("EMPTY_ANSWER");
         var failures=new ArrayList<String>();
-        if(INTERNAL.matcher(answer).find())failures.add("INTERNAL_IMPLEMENTATION_EXPOSED");
+        if(INTERNAL.matcher(answer).find() || answer.matches("(?s).*场次编号.{0,8}[0-9]+.*"))failures.add("INTERNAL_IMPLEMENTATION_EXPOSED");
         if(MARKDOWN.matcher(answer).find())failures.add("MARKDOWN_FORMAT");
         if(answer.codePointCount(0,answer.length())>400)failures.add("OVERLONG_ANSWER");
         return failures;

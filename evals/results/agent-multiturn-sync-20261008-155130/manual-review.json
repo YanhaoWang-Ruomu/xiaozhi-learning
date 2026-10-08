@@ -1,0 +1,12 @@
+{
+  "reviewer": "coding-assistant",
+  "independentMedicalReview": false,
+  "answerVerdict": "NOT_ACCEPTED",
+  "notes": [
+    "未调用工具却声称重新查询，等待开放阶段。",
+    "Markdown及内部字段暴露。",
+    "仅资料位置与查询故障两组通过自动检查。"
+  ],
+  "allRecordedTurnsHaveZeroActiveAppointments": true,
+  "reviewScope": "Recorded turns only; no claims about unrun turns or stable success rate."
+}

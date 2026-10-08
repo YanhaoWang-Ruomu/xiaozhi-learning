@@ -1,0 +1,12 @@
+{
+  "reviewer": "coding-assistant",
+  "independentMedicalReview": false,
+  "answerVerdict": "NOT_ACCEPTED",
+  "notes": [
+    "收到真实流式片段和工具回调。",
+    "满额场景第一轮未调用工具却给出余量2，与夹具不符。",
+    "部分回复遗漏虚构演示说明，仍存在重复追问。"
+  ],
+  "allRecordedTurnsHaveZeroActiveAppointments": true,
+  "reviewScope": "Recorded turns only; no claims about unrun turns or stable success rate."
+}

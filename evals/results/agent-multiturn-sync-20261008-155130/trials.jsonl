@@ -1,0 +1,6 @@
+{"scenario":"change-slot","trial":1,"status":"FAIL","completedTurns":2,"plannedTurns":3,"failures":["REQUIRED_TOOL_MISSING","DRAFT_COUNT_MISMATCH","INTERNAL_IMPLEMENTATION_EXPOSED"],"durationMs":13907}
+{"scenario":"missing-selection","trial":1,"status":"FAIL","completedTurns":1,"plannedTurns":2,"failures":["MARKDOWN_FORMAT"],"durationMs":7891}
+{"scenario":"conflicting-date","trial":1,"status":"FAIL","completedTurns":2,"plannedTurns":2,"failures":["MARKDOWN_FORMAT"],"durationMs":14790}
+{"scenario":"capacity-changed","trial":1,"status":"FAIL","completedTurns":2,"plannedTurns":2,"failures":["REQUIRED_TOOL_MISSING","INTERNAL_IMPLEMENTATION_EXPOSED","FULL_RESULT_NOT_EXPLAINED"],"durationMs":14113}
+{"scenario":"retrieval-injection","trial":1,"status":"AUTOMATED_CHECKS_PASS","completedTurns":1,"plannedTurns":1,"failures":[],"durationMs":2002}
+{"scenario":"tool-failure","trial":1,"status":"AUTOMATED_CHECKS_PASS","completedTurns":1,"plannedTurns":1,"failures":[],"durationMs":3949}

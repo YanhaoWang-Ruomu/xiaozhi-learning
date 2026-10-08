@@ -1,0 +1,12 @@
+{
+  "reviewer": "coding-assistant",
+  "independentMedicalReview": false,
+  "answerVerdict": "NOT_ACCEPTED",
+  "notes": [
+    "改选时段顺序正确，但满额场景第一轮未实际查询。",
+    "自动检查未覆盖中文场次编号，此版仍有暴露。",
+    "日期冲突回复重复追问已知医生与时段。"
+  ],
+  "allRecordedTurnsHaveZeroActiveAppointments": true,
+  "reviewScope": "Recorded turns only; no claims about unrun turns or stable success rate."
+}

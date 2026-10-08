@@ -1,0 +1,13 @@
+{
+  "reviewer": "coding-assistant",
+  "independentMedicalReview": false,
+  "answerVerdict": "NOT_ACCEPTED",
+  "notes": [
+    "收到真实流式片段和工具回调。",
+    "改选时段未查询且虚构场次编号。",
+    "Markdown、内部字段与不必要的操作邀请仍存在。",
+    "满额时虽未创建草稿，仍提出未核实的替代查询方向；不计整体语义合格。"
+  ],
+  "allRecordedTurnsHaveZeroActiveAppointments": true,
+  "reviewScope": "Recorded turns only; no claims about unrun turns or stable success rate."
+}

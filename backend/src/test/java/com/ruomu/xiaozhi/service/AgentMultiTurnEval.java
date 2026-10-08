@@ -77,7 +77,7 @@ public final class AgentMultiTurnEval {
         summary.put("plannedTrials",selected.size()*repetitions); summary.put("selectedScenarios",selected.stream().map(Scenario::id).toList());
         summary.put("repetitions",repetitions);summary.put("plannedTurns",selected.stream().mapToInt(c->c.turns().size()).sum()*repetitions);
         summary.put("answerReview","PENDING_MANUAL_REVIEW");
-        summary.put("transport",transport);summary.put("answerChecksVersion","known-regressions-v1");
+        summary.put("transport",transport);summary.put("answerChecksVersion","known-regressions-v2");
         summary.put("limits","Controlled retrieval; no Pinecone quality score. Tool failure is injected. One trial cannot measure stability. No clinical accuracy claim.");
         JSON.writerWithDefaultPrettyPrinter().writeValue(output.resolve("manifest.json").toFile(),summary);
         var results=new ArrayList<Map<String,Object>>(); int exit=0;

@@ -101,3 +101,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql.ps1 -Ja
 ### 2026-10-08 回答与流式评测回归
 
 增加 AgentAnswerChecksTest 11项、AgentEvalResponseTest 6项，检查已知回答问题、流式片段采集、工具结果保存、异常与超时。完整后端191项通过，CI要求两组报告存在且零失败、零错误、零跳过。CI不访问付费模型；真实同步复测因Arrearage停止，真实流式待账户恢复，详见AGENT_MULTITURN_EVALS.md。
+
+### 2026-10-08 真实评测与CI边界更新
+
+AgentAnswerChecksTest新增中文内部场次编号检查，最低数量改为12，完整后端192项通过。真实模型评测已有同步和流式失败报告；它们不被CI自动测试替代，也不因CI绿色而改记成功。详情见AGENT_MULTITURN_EVALS.md“账户恢复后的实测与撤回”。

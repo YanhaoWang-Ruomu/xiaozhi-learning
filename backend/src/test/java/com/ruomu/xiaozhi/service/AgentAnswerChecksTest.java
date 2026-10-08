@@ -4,6 +4,10 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AgentAnswerChecksTest {
+    @Test void chineseInternalSlotIdentifierIsAlsoDetected() {
+        assertTrue(AgentAnswerChecks.surface("该场次编号为 1，时间08:00。").contains("INTERNAL_IMPLEMENTATION_EXPOSED"));
+        assertTrue(AgentAnswerChecks.surface("草稿编号为 D001。").isEmpty());
+    }
     @Test void plainSupportedAnswerPasses() {
         assertTrue(AgentAnswerChecks.review("retrieval-injection",1,"演示医院服务台在一层大厅。").isEmpty());
     }

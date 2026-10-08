@@ -1,0 +1,8 @@
+{
+  "baseCommit": "bee7eb11bce19347f4f83bd7c6135d4f83b1dc18",
+  "variant": "experiment-1",
+  "stageModelsSha256": "c2caaba93ca90888bb9d210b93757d0020c307dd83dc04e3fd975ff5907f2e18",
+  "disposition": "REJECTED_NOT_MERGED",
+  "hashNormalization": "UTF-8 with LF",
+  "snapshotReconstructedFromRecordedEdits": true
+}
