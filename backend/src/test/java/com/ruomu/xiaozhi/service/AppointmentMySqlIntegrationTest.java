@@ -45,12 +45,12 @@ class AppointmentMySqlIntegrationTest {
     private final String database = "xiaozhi_booking_test_" + UUID.randomUUID().toString().replace("-", "");
     private JdbcTemplate admin;
     private boolean databaseCreated;
-    private HikariDataSource source;
-    private JdbcTemplate jdbc;
-    private AppointmentService service;
+    HikariDataSource source; // Shared only by isolated test/evaluation fixtures.
+    JdbcTemplate jdbc; // Shared only by isolated test/evaluation fixtures.
+    AppointmentService service; // Shared only by isolated test/evaluation fixtures.
     private MongoClient mongoClient;
-    private MongoTemplate mongo;
-    private AppointmentDraftService drafts;
+    MongoTemplate mongo; // Shared only by isolated test/evaluation fixtures.
+    AppointmentDraftService drafts; // Shared only by isolated test/evaluation fixtures.
 
     @BeforeAll void openIsolatedDatabases() throws Exception {
         // Deliberately fixed non-business port. Do not read SPRING_DATASOURCE_* or application config.
@@ -132,12 +132,12 @@ class AppointmentMySqlIntegrationTest {
     private AppointmentResponse book(String draft, int session) {
         return service.createForConfirmedDraft(request(session), draft, ACCEPTED);
     }
-    private long count(String table) { return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Long.class); }
-    private long active() { return jdbc.queryForObject("SELECT COUNT(*) FROM demo_appointments WHERE status='DEMO_CREATED'", Long.class); }
-    private long active(int session) {
+    long count(String table) { return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Long.class); }
+    long active() { return jdbc.queryForObject("SELECT COUNT(*) FROM demo_appointments WHERE status='DEMO_CREATED'", Long.class); }
+    long active(int session) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM demo_appointment_session_bookings b JOIN demo_appointments a ON a.appointment_id=b.appointment_id WHERE b.session_id=? AND a.status='DEMO_CREATED'", Long.class, session);
     }
-    private void capacity(int daily, int perSession) {
+    void capacity(int daily, int perSession) {
         jdbc.update("UPDATE demo_appointment_schedules SET total_capacity=?", daily);
         jdbc.update("UPDATE demo_appointment_sessions SET total_capacity=?", perSession);
     }
@@ -338,12 +338,12 @@ class AppointmentMySqlIntegrationTest {
         assertAttemptCounts(0, 1);
     }
 
-    private AppointmentWorkflowService workflow() {
+    AppointmentWorkflowService workflow() {
         var history=new ConversationHistoryService(mongo);
         var owned=new OwnedAppointmentService(history,drafts,service,mongo);
         return new AppointmentWorkflowService(mongo,history,drafts,owned,new AppointmentSessionService(source));
     }
-    private AppointmentWorkflowService.Checkpoint readyWorkflow() {
+    AppointmentWorkflowService.Checkpoint readyWorkflow() {
         var tomorrow=LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).plusDays(1);
         jdbc.update("UPDATE demo_appointment_schedules SET visit_date=?",tomorrow);
         jdbc.update("UPDATE demo_appointment_sessions SET visit_date=?",tomorrow);

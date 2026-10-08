@@ -84,3 +84,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql.ps1 -Ja
 ## 2026-10-07：浏览器与OTLP
 
 本机后端122项、前端49项、Chromium浏览器7项通过。CI新增OtlpExportTest四项门禁和Playwright检查；使用独立HTTP测试服务，不调用模型和业务数据库。浏览器报告、失败trace及截图并入frontend-test-reports。部署边界见UI_ACCEPTANCE.md。
+
+
+## 2026-10-08：多轮 Agent 检查
+
+后端门禁增加AgentMultiTurnContractTest八项与AgentMultiTurnGraderTest八项，完整后端138项。本机失败0、错误0、跳过0。CI同时上传target/agent-multiturn/contracts中的逐步数据库状态；真实Qwen评测显式运行，不进入无密钥CI。固定场景、运行命令和失败基线见AGENT_MULTITURN_EVALS.md。

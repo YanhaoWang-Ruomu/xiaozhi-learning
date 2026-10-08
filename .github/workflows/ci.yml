@@ -64,7 +64,8 @@ jobs:
                     ('controller.ChatControllerStreamTest', 27), ('security.AccountSecurityConfigTest', 2),
                     ('config.DashScopeNetworkConfigTest', 3), ('config.ModelErrorSummaryTest', 5),
                     ('config.DashScopeIdleTimeoutTest', 1), ('eval.RetrievalEvalTest', 10), ('context.ContextEngineeringTest', 7),
-                    ('service.HybridKnowledgeTest', 7), ('observability.TracingTest', 3), ('observability.OtlpExportTest', 4)]
+                    ('service.HybridKnowledgeTest', 7), ('observability.TracingTest', 3), ('observability.OtlpExportTest', 4),
+                    ('service.AgentMultiTurnContractTest', 8), ('service.AgentMultiTurnGraderTest', 8)]
           for suite, minimum in suites:
               report = ET.parse(f'backend/target/surefire-reports/TEST-com.ruomu.xiaozhi.{suite}.xml').getroot()
               assert int(report.attrib['tests']) >= minimum, f'{suite}: tests missing'
@@ -75,7 +76,9 @@ jobs:
         if: always()
         with:
           name: backend-test-reports
-          path: backend/target/surefire-reports/
+          path: |
+            backend/target/surefire-reports/
+            backend/target/agent-multiturn/
           if-no-files-found: warn
           retention-days: 7
 
@@ -159,7 +162,7 @@ jobs:
         working-directory: .
         shell: pwsh
         run: |
-          foreach ($file in @('scripts/build-release.ps1', 'deploy/start.ps1', 'scripts/test-backup-restore.ps1', 'scripts/test-ai-retrieval.ps1')) {
+          foreach ($file in @('scripts/build-release.ps1', 'deploy/start.ps1', 'scripts/test-backup-restore.ps1', 'scripts/test-ai-retrieval.ps1', 'scripts/test-mysql.ps1')) {
             $tokens = $null
             $parseErrors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $file), [ref]$tokens, [ref]$parseErrors) | Out-Null
