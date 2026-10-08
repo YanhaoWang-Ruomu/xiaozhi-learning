@@ -42,14 +42,15 @@ jobs:
           npm run build
       - name: Package executable application and operating instructions
         run: |
-          mvn -B -ntp -f backend/pom.xml -Prelease-ui -DskipTests package
+          mvn -B -ntp -f backend/pom.xml -Prelease-ui -DskipTests clean package
           mkdir -p release/mcp release/config
           cp backend/target/backend-1.0-SNAPSHOT.jar release/xiaozhi.jar
           cp deploy/start.ps1 release/
-          cp deploy/application.properties.example release/config/
+          cp deploy/application.properties.example release/config/application.properties
           cp -r deploy sql docs release/
           cp mcp/*.mjs mcp/package*.json release/mcp/
           printf '%s\n' "$(git rev-parse HEAD)" > release/COMMIT.txt
+          python3 scripts/check-release.py --jar release/xiaozhi.jar --dist xiaozhi-ui/dist --release-dir release
           (cd release && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
           (cd release && zip -qr ../xiaozhi-${GITHUB_REF_NAME}.zip .)
           sha256sum xiaozhi-${GITHUB_REF_NAME}.zip > xiaozhi-${GITHUB_REF_NAME}.zip.sha256

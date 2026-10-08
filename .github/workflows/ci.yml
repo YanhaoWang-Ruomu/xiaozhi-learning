@@ -149,15 +149,8 @@ jobs:
       - name: Check executable JAR includes the production Vue page
         working-directory: .
         run: |
-          mvn -B -ntp -f backend/pom.xml -Prelease-ui -DskipTests package
-          python3 - <<'PY'
-          import zipfile
-          with zipfile.ZipFile('backend/target/backend-1.0-SNAPSHOT.jar') as jar:
-              names = jar.namelist()
-              assert 'BOOT-INF/classes/static/index.html' in names
-              assert any(n.startswith('BOOT-INF/classes/static/assets/') and n.endswith('.js') for n in names)
-              assert 'BOOT-INF/classes/static/demo.html' not in names
-          PY
+          mvn -B -ntp -f backend/pom.xml -Prelease-ui -DskipTests clean package
+          python3 scripts/check-release.py --jar backend/target/backend-1.0-SNAPSHOT.jar --dist xiaozhi-ui/dist
       - name: Check backup drill JavaScript syntax
         working-directory: .
         run: node --check scripts/backup-restore-probe.mjs
