@@ -31,3 +31,11 @@ it('shows failed retrieval without inventing a result', async () => {
  apiFetch.mockResolvedValue({ok:false,status:503});wrapper=mount(EngineeringLab,{props:{userId:'owner'}})
  await button('运行检索').trigger('click');await flushPromises();expect(wrapper.text()).toContain('HTTP 503');expect(wrapper.findAll('article')).toHaveLength(0)
 })
+
+it('dedicated ranking runs only after explicit selection and click', async () => {
+ apiFetch.mockResolvedValue({ok:true,json:async()=>({accepted:[],scoreType:'dedicated_relevance',fallback:''})})
+ wrapper=mount(EngineeringLab,{props:{userId:'owner'}})
+ await wrapper.find('select').setValue('dedicated');expect(apiFetch).not.toHaveBeenCalled()
+ await button('运行检索').trigger('click');await flushPromises()
+ expect(apiFetch.mock.calls[0][0]).toContain('mode=dedicated');expect(wrapper.text()).toContain('dedicated_relevance')
+})

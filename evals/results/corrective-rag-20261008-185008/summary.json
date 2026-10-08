@@ -1,0 +1,9 @@
+{
+  "planned" : 12,
+  "limits" : "New fictional evidence; no Pinecone or business databases. Fixed reference labels; review borderline capability questions separately. Extractive quotes establish provenance, not truth or instruction safety.",
+  "datasetSha256" : "4e4feaca0264c1a588b4445353f3efcb918565565b18088d8d9ee51ed1cc834f",
+  "at" : "2026-10-08T07:50:17.639243200Z",
+  "mode" : "LIVE_QWEN_SYNTHETIC_CONTROLLED_EVIDENCE",
+  "recorded" : 4,
+  "passed" : 3
+}

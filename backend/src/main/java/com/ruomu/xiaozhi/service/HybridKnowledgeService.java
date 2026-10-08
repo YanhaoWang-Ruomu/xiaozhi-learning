@@ -18,15 +18,18 @@ public class HybridKnowledgeService {
     private final KnowledgeSearchService vector;
     private final QwenChatModel model;
     private final String mode;
+    private DedicatedReranker dedicated;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setDedicated(DedicatedReranker dedicated){this.dedicated=dedicated;}
     public HybridKnowledgeService(KnowledgeDocumentService documents,KnowledgeSearchService vector,
             QwenChatModel model,@Value("${xiaozhi.rag.mode:hybrid}") String mode){
-        if(!Set.of("vector","hybrid","llm").contains(mode))throw new IllegalArgumentException("Unsupported retrieval mode");
+        if(!Set.of("vector","hybrid","llm","dedicated").contains(mode))throw new IllegalArgumentException("Unsupported retrieval mode");
         this.documents=documents;this.vector=vector;this.model=model;this.mode=mode;
     }
     public Result search(String query){return search(query,mode);}
     public Result search(String query,String selected){
         if(query==null||query.isBlank()||query.length()>500)throw new IllegalArgumentException("Query length must be 1..500");
-        if(!Set.of("vector","hybrid","llm").contains(selected))throw new IllegalArgumentException("Unsupported retrieval mode");
+        if(!Set.of("vector","hybrid","llm","dedicated").contains(selected))throw new IllegalArgumentException("Unsupported retrieval mode");
         return AiTelemetry.call("retrieval."+selected,()->run(query,selected));
     }
     private Result run(String query,String selected){
@@ -63,14 +66,19 @@ public class HybridKnowledgeService {
             ranked.add(new Candidate(c.index(),c.source(),c.text(),denseScores.getOrDefault(c.index(),0.0),lexical.get(c.index()),fusion.get(c.index()),relevance));
         }
         ranked.sort(Comparator.comparingDouble(Candidate::rrf).reversed().thenComparingInt(Candidate::index));
+        var eligible=ranked.stream().filter(c->c.dense()>=.80||(c.bm25()>0&&c.relevance()>=.52)).map(Candidate::index).collect(java.util.stream.Collectors.toSet());
         String fallback="";String failureReason="";String scoreType="local_feature_score";
+        if(selected.equals("dedicated")) {
+            if(dedicated==null)throw new IllegalStateException("Dedicated reranker not configured");
+            ranked=new ArrayList<>(dedicated.rerank(query,ranked));scoreType="dedicated_relevance";
+        }
         if(selected.equals("llm")){
             try{ranked=new ArrayList<>(rerank(query,ranked));scoreType="llm_relevance";}
             catch(RuntimeException e){fallback="LLM_RERANK_FAILED_LOCAL_FALLBACK";failureReason=classifyFailure(e);}
         }
         ranked.sort(Comparator.comparingDouble(Candidate::relevance).reversed().thenComparingInt(Candidate::index));
         final String type=scoreType;
-        var accepted=ranked.stream().filter(c->type.equals("llm_relevance") ? c.relevance()>=.65 :
+        var accepted=ranked.stream().filter(c->type.equals("dedicated_relevance") ? eligible.contains(c.index()) : type.equals("llm_relevance") ? c.relevance()>=.65 :
             (c.dense()>=.80 || (c.bm25()>0 && c.relevance()>=.52))).limit(2)
             .map(c->new Match(c.index(),c.source(),c.relevance(),c.text())).toList();
         return new Result(selected,scoreType,fallback,failureReason,List.copyOf(ranked),accepted);

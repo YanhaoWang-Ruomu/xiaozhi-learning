@@ -9,7 +9,7 @@ public class RetrievalExperimentController {
     public RetrievalExperimentController(HybridKnowledgeService search){this.search=search;}
     @GetMapping("/api/knowledge/compare")
     public HybridKnowledgeService.Result compare(@RequestParam String query,@RequestParam(defaultValue="hybrid") String mode){
-        if(!java.util.Set.of("vector","hybrid","llm").contains(mode)||query.isBlank()||query.length()>500)
+        if(!java.util.Set.of("vector","hybrid","llm","dedicated").contains(mode)||query.isBlank()||query.length()>500)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"检索参数无效");
         return search.search(query,mode);
     }

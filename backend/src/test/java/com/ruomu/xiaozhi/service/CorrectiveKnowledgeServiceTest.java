@@ -136,7 +136,7 @@ class CorrectiveKnowledgeServiceTest {
         var rag=new KnowledgeRetrievalAugmentor(vector);rag.setQueryContext(new AppointmentQueryContext());
         rag.setCorrective(new CorrectiveKnowledgeService(q->{fail("booking must not enter checker");return List.of();},p->{fail();return "";}));
         rag.augment(request("预约DEMO001内科明天测试医生上午"));
-        verify(vector).search(anyString());
+        verifyNoInteractions(vector);
     }
 
     @Test void recallUsesValidatedCorpusIdentityWithoutConfusingShortQuotesWithMissingRetrieval() {

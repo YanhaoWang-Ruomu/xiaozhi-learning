@@ -1,0 +1,12 @@
+{
+  "purpose": "Only previously reviewed public fictional DEMO001 teaching material and 24 synthetic questions; no database, accounts or conversation data.",
+  "destination": "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+  "files": {
+    "evals/retrieval-v1.jsonl": "e0e8eae18a67dde3cd58ed6cedcf9db123187681943687cdde7a4413fa1784b7",
+    "backend/src/main/resources/knowledge/catalog.txt": "e40be93e9b2f6e6bd9902148737955ad2bf89f715d0061b949474f9500134ab7",
+    "backend/src/main/resources/knowledge/hospital-info.txt": "cdd1e8bae69b9f29e0a5d6d442b074eba99fc5ff9e168bb988fd20f94eb3684a",
+    "backend/src/main/resources/knowledge/appointment-guide.txt": "e595a77a8fb147b5c73e4f53e94374b73eb91e7b1e01e950eb73cb741b5d82b2",
+    "backend/src/main/resources/knowledge/knowledge-scope.txt": "8b043745adda1ed62b6c41d330d88c63162a36b8351f1df74c5a940d7f31aa3f",
+    "backend/src/main/resources/knowledge/visit-handbook.pdf": "a591069422150969561d839805309c7d9bfdc9dbf8c62ccd2e7161848b169fb3"
+  }
+}

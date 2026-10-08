@@ -1,0 +1,6 @@
+{
+  "reviewer": "Codex",
+  "verdict": "PASS_RECALL_NONREGRESSION_ONLY_KEEP_DISABLED",
+  "details": "24/24 executed; baseline and corrective recall both 0.975, no false accepts on four unrelated cases and no check errors. R20 still selects only one evidence component but judges sufficient. No successful live Pinecone rewrite-recovery case in this sample.",
+  "related": "New evidence challenge report has a missed-answer failure; do not infer semantic completeness or production readiness."
+}

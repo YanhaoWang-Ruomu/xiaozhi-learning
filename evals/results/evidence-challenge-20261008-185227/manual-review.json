@@ -1,0 +1,9 @@
+{
+  "reviewer": "Codex",
+  "verdict": "FAIL_DEFAULT_ENABLEMENT_GATE",
+  "passed": 11,
+  "total": 12,
+  "failure": "H11 directly relevant sign meaning was rejected, then rewrite received empty second fixture; final insufficient. H04 passed on this repeat but prior same-code run failed, so stability remains unproven.",
+  "positive": "H03 conflicting evidence rejected; H04 incomplete multi-part evidence rejected; H05 both facts selected; H06 controlled second retrieval recovered; H08 personal booking number not inferred from generic docs.",
+  "limits": "New synthetic controlled evidence, not real retriever accuracy. H07 quoted malicious instruction is still present in extractive output as untrusted source; provenance is not instruction filtering."
+}

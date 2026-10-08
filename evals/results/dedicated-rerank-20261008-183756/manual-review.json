@@ -1,0 +1,6 @@
+{
+  "reviewer": "Codex",
+  "verdict": "PASS_FIXED_SAMPLE_ONLY",
+  "gain": "R20 evidence coverage 0.5 to 1; other positive recalls unchanged; four negative accepts remain zero.",
+  "limits": "One synthetic reused corpus; extra irrelevant accepted candidates remain. No new precision or final-answer quality claim. Keep hybrid default."
+}

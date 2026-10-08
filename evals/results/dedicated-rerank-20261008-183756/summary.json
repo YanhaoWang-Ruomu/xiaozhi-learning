@@ -1,0 +1,17 @@
+{
+  "at" : "2026-10-08T07:39:03.281338400Z",
+  "model" : "gte-rerank-v2",
+  "endpoint" : "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+  "datasetSha256" : "e0e8eae18a67dde3cd58ed6cedcf9db123187681943687cdde7a4413fa1784b7",
+  "planned" : 24,
+  "recorded" : 24,
+  "positiveCount" : 20,
+  "baselineRecall" : 0.975,
+  "baselineFalseAccepts" : 0,
+  "rerankRecall" : 1.0,
+  "rerankFalseAccepts" : 0,
+  "failures" : 0,
+  "meanRerankMs" : 1367.3333333333333,
+  "releaseGate" : "PASS_FIXED_SAMPLE_ONLY",
+  "limits" : "Read-only real Pinecone/dedicated model. Same candidates and eligibility; only order changes. Relative model scores are not calibrated probabilities. Small reused corpus, not held-out answer quality."
+}

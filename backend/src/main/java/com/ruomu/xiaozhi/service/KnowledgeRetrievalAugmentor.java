@@ -62,10 +62,15 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
         String query = com.ruomu.xiaozhi.context.FollowUpQuery.rewrite(originalText.strip(),
             request.metadata() == null ? null : request.metadata().chatMemory());
 
+        var route=AdaptiveAgentRouter.decide(query,queryContext==null||conversation==null?null:queryContext.input(conversation));
+        io.opentelemetry.api.trace.Span.current().setAttribute("agent.route",route.route().name()).setAttribute("agent.route.reason",route.reason()).setAttribute("agent.route.steps",String.join(",",route.steps()));
+        if(queryContext!=null&&conversation!=null&&!route.reply().isBlank())queryContext.evidenceReply(conversation,turn,route.reply());
         String status;
         List<Content> contents = List.of();
 
-        if (query.isBlank() || query.length() > 500) {
+        if (!route.retrieve()) {
+            status = "ROUTED_"+route.route().name();
+        } else if (query.isBlank() || query.length() > 500) {
             status = "SKIPPED";
         } else {
             try {

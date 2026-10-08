@@ -1,0 +1,6 @@
+{"scenario":"change-slot","trial":1,"status":"AUTOMATED_CHECKS_PASS","completedTurns":3,"plannedTurns":3,"failures":[],"durationMs":465}
+{"scenario":"missing-selection","trial":1,"status":"AUTOMATED_CHECKS_PASS","completedTurns":2,"plannedTurns":2,"failures":[],"durationMs":54}
+{"scenario":"conflicting-date","trial":1,"status":"AUTOMATED_CHECKS_PASS","completedTurns":2,"plannedTurns":2,"failures":[],"durationMs":51}
+{"scenario":"capacity-changed","trial":1,"status":"AUTOMATED_CHECKS_PASS","completedTurns":2,"plannedTurns":2,"failures":[],"durationMs":76}
+{"scenario":"retrieval-injection","trial":1,"status":"AUTOMATED_CHECKS_PASS","completedTurns":1,"plannedTurns":1,"failures":[],"durationMs":4549}
+{"scenario":"tool-failure","trial":1,"status":"AUTOMATED_CHECKS_PASS","completedTurns":1,"plannedTurns":1,"failures":[],"durationMs":22}

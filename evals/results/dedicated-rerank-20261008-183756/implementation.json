@@ -1,0 +1,9 @@
+{
+  "baseCommit": "8964233ddc4e71719ee2b25a8a6238da16cef15e",
+  "sourceHashes": {
+    "backend/src/main/java/com/ruomu/xiaozhi/service/DedicatedReranker.java": "7a756558519acfc0ea81e88e2e300f4eb89295bcf9385621861e47eb2a723e20",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/HybridKnowledgeService.java": "aa7f86e6399b4d2f867bf94b7510c28530026839a92d626046e8a231f12449f3"
+  },
+  "model": "gte-rerank-v2",
+  "selectionGate": "unchanged local eligibility; rerank controls ordering only"
+}

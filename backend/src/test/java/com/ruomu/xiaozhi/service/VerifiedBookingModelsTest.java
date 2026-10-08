@@ -120,7 +120,7 @@ class VerifiedBookingModelsTest {
     @Test void successfulDraftReplyUsesSavedDetailsAndCannotRepeatCreate() throws Exception {
         var user=begin("预约DEMO001内科明天测试医生下午");
         var saved=ToolExecutionResultMessage.from("c",CREATE,
-            "{\"status\":\"PENDING_CONFIRMATION\",\"draft\":{\"visitDate\":\"2026-10-09\",\"session\":{\"doctorName\":\"测试医生\",\"startTime\":\"14:00\",\"endTime\":\"17:00\"}}}");
+            "{\"status\":\"PENDING_CONFIRMATION\",\"draft\":{\"status\":\"PENDING_CONFIRMATION\",\"hospitalId\":\"DEMO001\",\"department\":\"内科\",\"visitDate\":\"2026-10-09\",\"session\":{\"sessionId\":\"2\",\"doctorName\":\"测试医生\",\"startTime\":\"14:00\",\"endTime\":\"17:00\"}}}");
         var response=decide(user,result("AVAILABLE",3),saved);finalOnly(response);
         assertTrue(response.aiMessage().text().contains("14:00至17:00"));
         assertTrue(response.aiMessage().text().contains("不占号"));
@@ -167,5 +167,27 @@ class VerifiedBookingModelsTest {
     }
     @Test void reversedTimeRangeCannotAuthorizeDraft() {
         assertNull(BookingTurn.parse("预约DEMO001内科明天测试医生上午12:00到08:00",null,TODAY).selected(slots("AVAILABLE",3)));
+    }
+
+    private ToolExecutionResultMessage savedDraft(String session,String day,String doctor,String start,String status)throws Exception{
+        return ToolExecutionResultMessage.from("c",CREATE,json.writeValueAsString(Map.of("status","PENDING_CONFIRMATION","draft",
+            Map.of("status",status,"hospitalId","DEMO001","department","内科","visitDate",day,
+                "session",Map.of("sessionId",session,"doctorName",doctor,"startTime",start,"endTime","17:00")))));
+    }
+    @Test void mismatchedReturnedSessionDoesNotClaimSuccess()throws Exception{
+        var r=decide(begin("预约DEMO001内科明天测试医生下午"),result("AVAILABLE",3),savedDraft("1","2026-10-09","测试医生","14:00","PENDING_CONFIRMATION"));
+        assertTrue(r.aiMessage().text().contains("不一致"));assertFalse(r.aiMessage().text().contains("已生成"));
+    }
+    @Test void mismatchedReturnedDateAndTimeDoNotClaimSuccess()throws Exception{
+        for(var values:List.of(List.of("2026-10-10","14:00"),List.of("2026-10-09","15:00"))){
+            var r=decide(begin("预约DEMO001内科明天测试医生下午"),result("AVAILABLE",3),savedDraft("2",values.get(0),"测试医生",values.get(1),"PENDING_CONFIRMATION"));
+            assertTrue(r.aiMessage().text().contains("不一致"));
+        }
+    }
+    @Test void mismatchedDoctorAndStateDoNotClaimSuccess()throws Exception{
+        for(var values:List.of(List.of("其他医生","PENDING_CONFIRMATION"),List.of("测试医生","CONFIRMED"))){
+            var r=decide(begin("预约DEMO001内科明天测试医生下午"),result("AVAILABLE",3),savedDraft("2","2026-10-09",values.get(0),"14:00",values.get(1)));
+            assertTrue(r.aiMessage().text().contains("不一致"));
+        }
     }
 }

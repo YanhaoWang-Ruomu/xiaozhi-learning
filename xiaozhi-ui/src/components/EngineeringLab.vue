@@ -36,7 +36,7 @@ onBeforeUnmount(() => { disposed = true; for (const controller of controllers) c
  <div class="lab-grid">
  <section class="lab-card" aria-label="检索对照"><span class="eyebrow">01 · 资料依据</span><h2>检索对照</h2><p class="muted">同一个问题，用不同方案查找资料。评分不是医疗准确率。</p>
  <label>问题<input v-model="query" maxlength="500" :disabled="busy" /></label>
- <label>方案<select v-model="mode" :disabled="busy"><option value="vector">向量检索</option><option value="hybrid">混合检索与特征重排</option><option value="llm">混合检索与模型重排（额外调用模型）</option></select></label>
+ <label>方案<select v-model="mode" :disabled="busy"><option value="vector">向量检索</option><option value="hybrid">混合检索与特征重排</option><option value="llm">混合检索与模型重排（额外调用模型）</option><option value="dedicated">专用相关性模型重排（额外调用排序服务）</option></select></label>
  <button class="primary" :disabled="busy || !query.trim()" @click="compare">运行检索</button><span v-if="busy" class="muted" role="status">正在处理，请稍候…</span>
  <div v-if="result" class="retrieval-result"><div class="result-heading"><strong>采用 {{ result.accepted.length }} 个片段</strong><span class="demo-pill">{{ result.scoreType }}</span></div><p v-if="result.fallback" class="lab-notice">本次采用回退方案：{{ result.fallback }} {{ result.failureReason }}</p><article v-for="item in result.accepted" :key="item.index"><strong>{{ item.source }}</strong><p>{{ item.text }}</p></article><p v-if="!result.accepted.length" class="muted">没有达到阈值的资料，请调整问题后再试。</p></div>
  <div v-else class="lab-empty">检索结果会显示在这里。点击后才会发起查询。</div>

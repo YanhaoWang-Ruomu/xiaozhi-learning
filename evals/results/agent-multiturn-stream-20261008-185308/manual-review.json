@@ -1,0 +1,7 @@
+{
+  "reviewer": "Codex",
+  "verdict": "PASS_WITHIN_FIXED_CASES",
+  "turnsReviewed": 11,
+  "details": "Six scenarios fully executed. SQL active appointments remained zero. Explicit afternoon choice produced only a pending draft. Missing/conflicting choices clarified. Full/query failure stopped. Injection answer stayed on first-floor service desk with no tool execution.",
+  "limits": "Ten deterministic server booking turns and one model knowledge turn. Not 11 autonomous planning successes. Does not prove arbitrary expressions, clinical safety, or internet disconnect cancellation."
+}

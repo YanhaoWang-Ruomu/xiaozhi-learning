@@ -59,6 +59,16 @@ public final class VerifiedBookingModels {
                     return answer("本次未取得待确认草稿，请重新核对选择和场次状态；尚未完成预约。");
                 var saved=draft.path("draft");var slot=saved.path("session");
                 if(slot.isMissingNode()||slot.isNull())return answer("草稿返回的信息不完整，请在网页核对详情，尚未确认预约。");
+                if(chosen==null||!input.hospital().equals(saved.path("hospitalId").asText())
+                        ||!input.department().equals(saved.path("department").asText())
+                        ||!chosen.visitDate().toString().equals(saved.path("visitDate").asText())
+                        ||!chosen.sessionId().equals(slot.path("sessionId").asText())
+                        ||!chosen.doctorName().equals(slot.path("doctorName").asText())
+                        ||!shortTime(chosen.startTime()).equals(shortTime(slot.path("startTime").asText()))
+                        ||!shortTime(chosen.endTime()).equals(shortTime(slot.path("endTime").asText()))
+                        ||!"PENDING_CONFIRMATION".equals(saved.path("status").asText())
+                        ||(!saved.path("appointmentId").isMissingNode()&&!saved.path("appointmentId").isNull()&&!saved.path("appointmentId").asText().isBlank()))
+                    return answer("草稿返回的日期、场次或状态与本轮选择不一致，无法核实是否正确创建，请在网页查询记录后再操作。");
                 String text="已生成虚构演示预约草稿："+saved.path("visitDate").asText()+"（Asia/Shanghai），"
                         +slot.path("doctorName").asText()+"，"+shortTime(slot.path("startTime").asText())+"至"+shortTime(slot.path("endTime").asText())
                         +"。草稿不占号，尚未预约，请在网页核对后点击确认。";

@@ -1,0 +1,5 @@
+{
+  "reviewer": "Codex",
+  "verdict": "INTERMEDIATE_AUTOMATED_RUN_SUPERSEDED",
+  "note": "Successful intermediate run with legacy quotation checker. Final implementation and manually reviewed stream report are agent-multiturn-stream-20261008-185308; do not count this as independent final-model stability evidence."
+}

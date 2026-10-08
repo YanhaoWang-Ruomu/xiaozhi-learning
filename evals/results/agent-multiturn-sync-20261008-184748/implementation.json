@@ -1,0 +1,16 @@
+{
+  "baseCommit": "8964233ddc4e71719ee2b25a8a6238da16cef15e",
+  "hashEncoding": "UTF8 LF-normalized",
+  "sourceHashes": {
+    "backend/src/main/java/com/ruomu/xiaozhi/service/AdaptiveAgentRouter.java": "66d432b3e1a3813a63a22cad266e1cb34323e6dff767332928b1008b05c9b561",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/CorrectiveKnowledgeService.java": "9c391e12a300509a8a171bc41d467be2daa71a8b010b2802e6bfe966b2181a36",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/DedicatedReranker.java": "7a756558519acfc0ea81e88e2e300f4eb89295bcf9385621861e47eb2a723e20",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/EvidenceBoundAnswer.java": "bfc2092f49079825675b74dde5cd52fa6404b7889d072fa261f101597ee9c788",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/HybridKnowledgeService.java": "aa7f86e6399b4d2f867bf94b7510c28530026839a92d626046e8a231f12449f3",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/KnowledgeRetrievalAugmentor.java": "d77d92a35508c9c697767556a0c87caf2396dd81f4de507e3e8a37bca21ec5c0",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/VerifiedBookingModels.java": "401e30eb6cc0734924f1cc509db6459169e7da4376b8d212084c59fefe8a245b"
+  },
+  "backendTests": 280,
+  "frontendTests": 50,
+  "officialAgenticTests": 9
+}

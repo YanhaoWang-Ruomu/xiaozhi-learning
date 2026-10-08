@@ -1,0 +1,5 @@
+{
+  "baseCommit": "8964233ddc4e71719ee2b25a8a6238da16cef15e",
+  "checkerSha256": "9c391e12a300509a8a171bc41d467be2daa71a8b010b2802e6bfe966b2181a36",
+  "protocol": "index-selection with server-side source copy; legacy literal quote accepted only after exact validation"
+}

@@ -19,4 +19,15 @@ class HybridKnowledgeTest {
  @Test void validatesModeAndQuery(){var s=setup(mock(QwenChatModel.class));assertThrows(IllegalArgumentException.class,()->s.search("","hybrid"));assertThrows(IllegalArgumentException.class,()->s.search("轮椅","bad"));}
  @Test void classifiesProviderFailureWithoutLeakingMessage(){assertEquals("PROVIDER_ACCOUNT_UNAVAILABLE",HybridKnowledgeService.classifyFailure(new IllegalStateException(new RuntimeException("Arrearage private provider payload"))));}
  @Test void tokenizerNormalizesCaseAndUsesHanBigrams(){assertEquals(List.of("轮椅","椅借","借用","demo001"),HybridKnowledgeService.terms("轮椅借用 DEMO001"));}
+
+ @Test void dedicatedModeUsesSeparateScoreAndPreservesIdentity(){
+  var s=setup(mock(QwenChatModel.class));s.setDedicated(new DedicatedReranker("qwen3-rerank",b->"{\"results\":[{\"index\":0,\"relevance_score\":0.01},{\"index\":1,\"relevance_score\":0.99}]}"));
+  var result=s.search("轮椅","dedicated");assertEquals("dedicated_relevance",result.scoreType());assertEquals("",result.fallback());
+  assertTrue(result.accepted().stream().allMatch(m->m.source().equals(m.index()==0?"wheelchair":"hospital")));
+ }
+ @Test void dedicatedFailureDoesNotSilentlyReturnLocalRanking(){
+  var s=setup(mock(QwenChatModel.class));s.setDedicated(new DedicatedReranker("qwen3-rerank",b->{throw new IllegalStateException("unavailable");}));
+  assertThrows(IllegalStateException.class,()->s.search("轮椅","dedicated"));
+ }
+ @Test void missingDedicatedClientFailsExplicitly(){assertThrows(IllegalStateException.class,()->setup(mock(QwenChatModel.class)).search("轮椅","dedicated"));}
 }

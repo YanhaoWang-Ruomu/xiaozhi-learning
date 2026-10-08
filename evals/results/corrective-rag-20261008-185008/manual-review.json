@@ -1,0 +1,5 @@
+{
+  "reviewer": "Codex",
+  "verdict": "FAILED_AND_INCOMPLETE_CHALLENGE",
+  "details": "Challenge dataset, despite historical corrective-rag folder prefix. First runner stopped after H04: model requested another rewrite on the second round; contract rejected it. 3 of 4 executed passed, remaining 8 unrun. Retained as stochastic failure evidence. No checker change before complete second run."
+}
