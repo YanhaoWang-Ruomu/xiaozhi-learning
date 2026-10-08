@@ -89,3 +89,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql.ps1 -Ja
 ## 2026-10-08：多轮 Agent 检查
 
 后端门禁增加AgentMultiTurnContractTest八项与AgentMultiTurnGraderTest八项，完整后端138项。本机失败0、错误0、跳过0。CI同时上传target/agent-multiturn/contracts中的逐步数据库状态；真实Qwen评测显式运行，不进入无密钥CI。固定场景、运行命令和失败基线见AGENT_MULTITURN_EVALS.md。
+
+### 2026-10-08 预约工具查询凭据
+
+后端完整测试更新为 155 项：新增 AppointmentToolFailureTest 10 项、AppointmentQueryContextTest 7 项，并加入 CI 报告检查。真实模型六组复测为 5 组通过、1 组失败，报告独立保存，不混入离线测试成功率。浏览器测试保持 8 项。

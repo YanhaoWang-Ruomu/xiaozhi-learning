@@ -26,17 +26,20 @@ public class AppointmentTools {
     private final OwnedAppointmentService draftService;
     private final AppointmentScheduleService scheduleService;
     private final AppointmentSessionService sessionService;
+    private final com.ruomu.xiaozhi.service.AppointmentQueryContext queryContext;
 
     public AppointmentTools(
             AppointmentRuleService ruleService,
             OwnedAppointmentService draftService,
             AppointmentScheduleService scheduleService,
-            AppointmentSessionService sessionService) {
+            AppointmentSessionService sessionService,
+            com.ruomu.xiaozhi.service.AppointmentQueryContext queryContext) {
 
         this.ruleService = ruleService;
         this.draftService = draftService;
         this.scheduleService = scheduleService;
         this.sessionService = sessionService;
+        this.queryContext = queryContext;
     }
 
     @Tool("""
@@ -113,7 +116,8 @@ public class AppointmentTools {
     @Tool("""
             查询本地虚构医院未来三天的具体医生、时段、场次编号及参考余量。
             医院编号和科室必须来自用户明确提供的信息；未知编号也按工具结果回答。
-            返回 data.sessions；sessionId 是草稿所需场次编号，不是预约编号。
+            返回 data.sessions 及 queryReceipt；后者是本轮一次性查询凭据，生成草稿时必须原样传入。
+            sessionId 是草稿所需场次编号，不是预约编号。
             只展示用户所问日期、医生或时段；信息不足时请用户选择，不替用户决定。
             DEMO_DATA 是虚构教学数据，NO_DATA 是没有配置资料，不等于满额。
             referenceRemaining 是场次剩余与当天共享剩余的较小值；查询不预留名额。
@@ -121,23 +125,28 @@ public class AppointmentTools {
             NOT_RELEASED 表示尚未放号，可准备有余量的草稿但不能确认。
             FULL 表示满额，NO_SCHEDULE 表示缺少当天总排班，不创建对应草稿。
             不从文档、旧消息或示例中编造医生、时段、场次编号和余量。
+            QUERY_FAILED 表示查询失败，余量与排班均未知；不是 NO_DATA，也不是 FULL。
+            查询失败后本轮停止，不重试、不创建草稿、不推测无排班、满额或其他原因。
             此工具只查询本地数据，不创建草稿，不确认或取消预约。
             """)
     public Map<String, Object> queryAppointmentSessions(
             @P("用户明确提供的医院编号") String hospitalId,
-            @P("用户明确提供的科室") String department) {
+            @P("用户明确提供的科室") String department,
+            @ToolMemoryId String conversationId) {
         return com.ruomu.xiaozhi.observability.AiTelemetry.call("tool.queryAppointmentSessions", () -> {
-
+        String turn = queryContext.turn(conversationId);
+        queryContext.failed(conversationId, turn);
         try {
             AppointmentSessionResponse response =
                     sessionService.findSessions(hospitalId, department);
             System.out.println("[AppointmentTools] queryAppointmentSessions 已执行，状态="
                     + response.status());
-            return Map.of("status", response.status(), "data", response);
-        } catch (ResponseStatusException exception) {
-            if (exception.getStatusCode().value() != 400) throw exception;
-            return invalidInput(exception.getReason() == null
-                    ? "请提供医院编号和科室。" : exception.getReason());
+            String receipt = "DEMO_DATA".equals(response.status())
+                    ? queryContext.issued(conversationId, turn, hospitalId, department) : null;
+            if (receipt == null) return Map.of("status", response.status(), "data", response);
+            return Map.of("status", response.status(), "data", response, "queryReceipt", receipt);
+        } catch (RuntimeException exception) {
+            return queryFailure(exception);
         }
 
         });
@@ -146,7 +155,9 @@ public class AppointmentTools {
     @Tool("""
             为用户明确选择的具体场次创建待确认的本地演示预约草稿。
             仅在用户明确要求准备预约，并已选择医院、科室、日期、医生和时段时调用。
-            先使用 queryAppointmentSessions 查询，sessionId 必须取自匹配用户选择的结果。
+            本轮必须先调用 queryAppointmentSessions，不能跳过或复用上一轮查询结果。
+            只有本轮查询成功且匹配场次有余量时才调用本工具；QUERY_FAILED 时停止，不尝试创建。
+            sessionId 必须取自本轮匹配用户明确选择的结果。
             用户未指定医生或时段时先询问，不能自动选第一个；不要求用户手填内部编号。
             当前仅支持 DEMO001、内科以及业务日期范围内的演示场次。
             visitDate 使用 yyyy-MM-dd；明确的明天、后天、大后天按本轮服务器日期表换算。
@@ -163,6 +174,7 @@ public class AppointmentTools {
             @P("用户明确选择的科室") String department,
             @P("具体预约日期，yyyy-MM-dd；明确相对日期按本轮服务器日期表换算") String visitDate,
             @P("从最新场次查询结果中取得、匹配用户所选日期医生时段的sessionId") String sessionId,
+            @P("本轮 queryAppointmentSessions 成功返回的 queryReceipt，一次性凭据；旧轮次无效") String queryReceipt,
             @ToolMemoryId String conversationId) {
         return com.ruomu.xiaozhi.observability.AiTelemetry.call("tool.createAppointmentDraft", () -> {
 
@@ -182,6 +194,10 @@ public class AppointmentTools {
             );
         }
 
+        if (!queryContext.consume(conversationId, queryReceipt, hospitalId, department)) {
+            return Map.of("status", "QUERY_REQUIRED",
+                    "message", "缺少本轮有效查询凭据，未创建草稿。先调用 queryAppointmentSessions 重新核对场次；只有成功且有余量时才能使用新的 queryReceipt 创建。");
+        }
         String target = sessionId.strip();
         if (!target.matches("[1-9][0-9]{0,18}")) {
             return invalidInput("场次编号格式错误，请重新查询并选择，不能自行编造编号。");
@@ -207,8 +223,13 @@ public class AppointmentTools {
 
         try {
             // 在真正创建草稿前重新核对当前窗口和场次，查询不占号。
-            AppointmentSessionResponse response =
-                    sessionService.findSessions(hospitalId, department);
+            AppointmentSessionResponse response;
+            try {
+                response = sessionService.findSessions(hospitalId, department);
+            } catch (RuntimeException exception) {
+                // This read happens before any draft write; failures must not imply no data.
+                return queryFailure(exception);
+            }
             var selected = response.sessions().stream()
                     .filter(item -> target.equals(item.sessionId()) && date.equals(item.visitDate()))
                     .findFirst().orElse(null);
@@ -259,6 +280,26 @@ public class AppointmentTools {
         }
 
         });
+    }
+
+    private Map<String, Object> queryFailure(RuntimeException exception) {
+        if (exception instanceof ResponseStatusException response) {
+            int code = response.getStatusCode().value();
+            if (code == 400) return invalidInput(response.getReason() == null
+                    ? "请提供医院编号和科室。" : response.getReason());
+            if (code < 500) throw response; // Preserve authorization and conflict handling.
+        }
+        io.opentelemetry.api.trace.Span.current()
+                .setStatus(io.opentelemetry.api.trace.StatusCode.ERROR)
+                .setAttribute("error.type", exception.getClass().getSimpleName());
+        org.slf4j.LoggerFactory.getLogger(AppointmentTools.class)
+                .warn("APPOINTMENT_SESSION_QUERY_FAILED errorType={}", exception.getClass().getSimpleName());
+        return Map.of(
+                "status", "QUERY_FAILED",
+                "availability", "UNKNOWN",
+                "retryInCurrentTurn", false,
+                "message", "演示排班查询暂时失败，当前无法核实医生、时段和余量。本轮停止办理，未创建草稿。不能据此判断没有排班、满额或其他原因；可稍后重新发起查询。"
+        );
     }
 
     private Map<String, Object> invalidInput(String message) {

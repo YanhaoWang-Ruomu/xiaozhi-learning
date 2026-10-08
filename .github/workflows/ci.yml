@@ -65,7 +65,8 @@ jobs:
                     ('config.DashScopeNetworkConfigTest', 3), ('config.ModelErrorSummaryTest', 5),
                     ('config.DashScopeIdleTimeoutTest', 1), ('eval.RetrievalEvalTest', 10), ('context.ContextEngineeringTest', 7),
                     ('service.HybridKnowledgeTest', 7), ('observability.TracingTest', 3), ('observability.OtlpExportTest', 4),
-                    ('service.AgentMultiTurnContractTest', 8), ('service.AgentMultiTurnGraderTest', 8)]
+                    ('service.AgentMultiTurnContractTest', 8), ('service.AgentMultiTurnGraderTest', 8),
+                    ('service.AppointmentToolFailureTest', 10), ('service.AppointmentQueryContextTest', 7)]
           for suite, minimum in suites:
               report = ET.parse(f'backend/target/surefire-reports/TEST-com.ruomu.xiaozhi.{suite}.xml').getroot()
               assert int(report.attrib['tests']) >= minimum, f'{suite}: tests missing'

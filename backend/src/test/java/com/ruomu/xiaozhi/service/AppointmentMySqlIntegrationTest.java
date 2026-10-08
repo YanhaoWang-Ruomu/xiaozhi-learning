@@ -392,8 +392,9 @@ class AppointmentMySqlIntegrationTest {
             com.ruomu.xiaozhi.config.DashScopeNetworkConfig.dashScopeNetworkPolicy(new org.springframework.core.env.StandardEnvironment()).postProcessBeanFactory(null);
             var model=new com.ruomu.xiaozhi.config.AiConfig().qwenChatModel();
             var search=new KnowledgeSearchService(docs,new com.ruomu.xiaozhi.config.KnowledgeEmbeddingConfig().knowledgeEmbeddingModel(),new PineconeClient(json,System.getenv("PINECONE_API_KEY"),System.getenv("PINECONE_INDEX_HOST")));
-            var rag=new KnowledgeRetrievalAugmentor(search);rag.setHybrid(new HybridKnowledgeService(docs,search,model,"hybrid"));rag.setVerified(new VerifiedAppointmentContext(owned,history));
-            var tools=new com.ruomu.xiaozhi.tool.AppointmentTools(new AppointmentRuleService(),owned,new AppointmentScheduleService(fixture.jdbc),new AppointmentSessionService(fixture.source));
+            var queryContext=new AppointmentQueryContext();
+            var rag=new KnowledgeRetrievalAugmentor(search);rag.setQueryContext(queryContext);rag.setHybrid(new HybridKnowledgeService(docs,search,model,"hybrid"));rag.setVerified(new VerifiedAppointmentContext(owned,history));
+            var tools=new com.ruomu.xiaozhi.tool.AppointmentTools(new AppointmentRuleService(),owned,new AppointmentScheduleService(fixture.jdbc),new AppointmentSessionService(fixture.source),queryContext);
             var assistant=dev.langchain4j.service.AiServices.builder(ChatAssistant.class).chatLanguageModel(com.ruomu.xiaozhi.observability.ObservedModels.sync(model))
                 .chatMemoryProvider(id->new com.ruomu.xiaozhi.context.BudgetChatMemory(id,new com.ruomu.xiaozhi.store.MongoChatMemoryStore(fixture.mongo),64000))
                 .tools(tools).retrievalAugmentor(rag).build();
