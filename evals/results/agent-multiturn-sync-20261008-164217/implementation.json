@@ -1,0 +1,16 @@
+{
+  "baseCommit": "074f812cf000a9f5aff912c5bedcc7f2317f1a7b",
+  "branch": "integration/verified-booking-route",
+  "sourceState": "Final production sources, normalized UTF-8 LF SHA256; associated with the commit containing this report.",
+  "sourceSha256": {
+    "backend/src/main/java/com/ruomu/xiaozhi/service/BookingTurn.java": "4cfe3670a69e299fb3ada12ab916958780a794ab7c328c327c8a6e038d693320",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/VerifiedBookingModels.java": "2a3c2c372499eb5bfd385e7654d91d2d49fce167fd110cf0f43711b094599233",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/AppointmentQueryContext.java": "16d19f610db121f7fa1bfda3702c9e5bb0e55824031c28808ee358eae0822ac5",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/KnowledgeRetrievalAugmentor.java": "2ea049cce4e4df8863fe8874750436bec025a19f41cbcdf13700fa37ec40cdd6",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/StagedAppointmentModels.java": "091196faae76f0550e89515e3967f94b9c8597bcc842a2d7cd97b4ce5683d279",
+    "backend/src/main/java/com/ruomu/xiaozhi/tool/AppointmentTools.java": "8e960e32c5f2628c7385bf4bf73e3820932f9bf2b9bdbaed03bccffaf66a3f0e",
+    "backend/src/main/java/com/ruomu/xiaozhi/config/AiConfig.java": "484f49d447600d3bee1c11f484957c1144ab4630f2180a8cf7c5f44e205e3d00",
+    "backend/src/test/java/com/ruomu/xiaozhi/service/AgentMultiTurnEval.java": "eea46431b26e3608b9f557702df257032f7a6c4307b89838376893d05aa1e26a"
+  },
+  "fullBackendTests": 223
+}

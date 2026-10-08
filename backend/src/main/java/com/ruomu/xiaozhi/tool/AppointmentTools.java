@@ -243,6 +243,15 @@ public class AppointmentTools {
                 return invalidInput("该场次当前无可用名额或缺少排班，请重新查询并选择其他场次。");
             }
 
+            var input = queryContext.input(conversationId);
+            var explicit = input == null ? null : input.selected(response.sessions());
+            if (input == null || !hospitalId.strip().equals(input.hospital())
+                    || !department.strip().equals(input.department()) || explicit == null
+                    || !target.equals(explicit.sessionId()) || !date.equals(explicit.visitDate())) {
+                return Map.of("status", "SELECTION_REQUIRED",
+                        "message", "本轮原始需求没有明确选择该医院、科室、日期、医生和时段，未创建草稿。请明确选择后再准备。");
+            }
+
             AppointmentDraftResponse draft = draftService.createFromChat(
                     new CreateAppointmentRequest(
                             hospitalId,

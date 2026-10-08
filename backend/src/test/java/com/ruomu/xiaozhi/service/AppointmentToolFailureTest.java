@@ -14,7 +14,7 @@ class AppointmentToolFailureTest {
     private final AppointmentSessionService sessions = mock(AppointmentSessionService.class);
     private final OwnedAppointmentService drafts = mock(OwnedAppointmentService.class);
     private final AppointmentQueryContext queries = new AppointmentQueryContext();
-    private String receipt() { queries.begin("conversation"); return queries.issued("conversation",queries.turn("conversation"),"DEMO001","内科"); }
+    private String receipt() { queries.begin("conversation","请为我准备DEMO001内科2026-10-09演示医生上午草稿"); return queries.issued("conversation",queries.turn("conversation"),"DEMO001","内科"); }
     private final AppointmentTools tools = new AppointmentTools(mock(AppointmentRuleService.class),
             drafts, mock(AppointmentScheduleService.class), sessions, queries);
 
@@ -101,5 +101,40 @@ class AppointmentToolFailureTest {
         when(drafts.createFromChat(any(),eq("conversation"))).thenThrow(new IllegalStateException("write outcome unknown"));
         assertThrows(IllegalStateException.class,()->tools.createAppointmentDraft("DEMO001","内科","2026-10-09","1",receipt(),"conversation"));
         verify(drafts,times(1)).createFromChat(any(),eq("conversation"));
+    }
+
+    @Test void receiptCannotAuthorizeUnselectedDoctorSlotOrNegatedRequest() {
+        available(1);
+        for(String raw:List.of("预约DEMO001内科2026-10-09","预约DEMO001内科2026-10-09演示医生","不要预约DEMO001内科2026-10-09演示医生上午")) {
+            queries.begin("conversation",raw);
+            String receipt=(String)tools.queryAppointmentSessions("DEMO001","内科","conversation").get("queryReceipt");
+            assertEquals("SELECTION_REQUIRED",tools.createAppointmentDraft("DEMO001","内科","2026-10-09","1",receipt,"conversation").get("status"));
+        }
+        verifyNoInteractions(drafts);
+    }
+    @Test void hospitalOrDateSelectionCannotBeReplacedByModelArguments() {
+        available(1);
+        for(String raw:List.of("预约DEMO002内科2026-10-09演示医生上午","预约DEMO001内科2026-10-10演示医生上午")) {
+            queries.begin("conversation",raw);
+            String receipt=(String)tools.queryAppointmentSessions("DEMO001","内科","conversation").get("queryReceipt");
+            assertEquals("SELECTION_REQUIRED",tools.createAppointmentDraft("DEMO001","内科","2026-10-09","1",receipt,"conversation").get("status"));
+        }
+        verifyNoInteractions(drafts);
+    }
+    @Test void fallbackModelCannotWriteFromMissingTrustedInput() {
+        available(1);queries.begin("conversation");
+        String receipt=(String)tools.queryAppointmentSessions("DEMO001","内科","conversation").get("queryReceipt");
+        assertEquals("SELECTION_REQUIRED",tools.createAppointmentDraft("DEMO001","内科","2026-10-09","1",receipt,"conversation").get("status"));
+        verifyNoInteractions(drafts);
+    }
+    @Test void explicitSelectionWritesOnceAndOnlyAsPendingDraft() {
+        available(1);
+        var saved=mock(com.ruomu.xiaozhi.dto.AppointmentDraftResponse.class);
+        when(saved.status()).thenReturn("PENDING_CONFIRMATION");
+        when(drafts.createFromChat(any(),eq("conversation"))).thenReturn(saved);
+        String receipt=receipt();
+        assertEquals("PENDING_CONFIRMATION",tools.createAppointmentDraft("DEMO001","内科","2026-10-09","1",receipt,"conversation").get("status"));
+        assertEquals("QUERY_REQUIRED",tools.createAppointmentDraft("DEMO001","内科","2026-10-09","1",receipt,"conversation").get("status"));
+        verify(drafts,times(1)).createFromChat(argThat(r->r.visitDate().equals(LocalDate.of(2026,10,9))),eq("conversation"));
     }
 }

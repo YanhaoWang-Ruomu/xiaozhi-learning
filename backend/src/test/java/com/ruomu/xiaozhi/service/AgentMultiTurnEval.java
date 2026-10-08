@@ -71,7 +71,7 @@ public final class AgentMultiTurnEval {
         var selected=select(load(dataset),args[2]);
         Path output=Path.of(args[0]);Files.createDirectory(output); // Never overwrite an earlier run.
         var summary=new LinkedHashMap<String,Object>();
-        summary.put("mode","LIVE_QWEN_PRODUCTION_TOOLS_CONTROLLED_RETRIEVAL_REAL_MYSQL_MONGO");
+        summary.put("mode","MIXED_SERVER_BOOKING_FLOW_QWEN_CONTROLLED_RETRIEVAL_REAL_MYSQL_MONGO");
         summary.put("datasetSha256",HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(dataset)));
         summary.put("at",Instant.now().toString());summary.put("model","qwen-plus");
         summary.put("plannedTrials",selected.size()*repetitions); summary.put("selectedScenarios",selected.stream().map(Scenario::id).toList());
@@ -104,10 +104,10 @@ public final class AgentMultiTurnEval {
                 var queryContext=new AppointmentQueryContext();
                 var rag=new KnowledgeRetrievalAugmentor(search);rag.setQueryContext(queryContext);rag.setVerified(new VerifiedAppointmentContext(owned,history));
                 var tools=new AppointmentTools(new AppointmentRuleService(),owned,new AppointmentScheduleService(db.jdbc),sessions,queryContext);
-                var builder=AiServices.builder(ChatAssistant.class).chatLanguageModel(StagedAppointmentModels.sync(model))
+                var builder=AiServices.builder(ChatAssistant.class).chatLanguageModel(VerifiedBookingModels.sync(StagedAppointmentModels.sync(model),queryContext))
                     .chatMemoryProvider(id->new com.ruomu.xiaozhi.context.BudgetChatMemory(id,new com.ruomu.xiaozhi.store.MongoChatMemoryStore(db.mongo),64000))
                     .maxSequentialToolsInvocations(4).tools(tools).retrievalAugmentor(rag);
-                if(streamingModel!=null)builder.streamingChatLanguageModel(StagedAppointmentModels.streaming(streamingModel));
+                if(streamingModel!=null)builder.streamingChatLanguageModel(VerifiedBookingModels.streaming(StagedAppointmentModels.streaming(streamingModel),queryContext));
                 var assistant=builder.build();
                 var errors=new ArrayList<String>();int completed=0;long start=System.nanoTime();
                 for(int index=0;index<scenario.turns().size();index++) {
@@ -116,6 +116,7 @@ public final class AgentMultiTurnEval {
                     long turnStart=System.nanoTime();
                     try {
                         var answer=AgentEvalResponse.call(assistant,cp.conversationId(),turn.message(),BusinessDateContext.now(),transport);
+                        row.put("selectedRoute",queryContext.input(cp.conversationId())!=null&&queryContext.input(cp.conversationId()).handled()?"SERVER_BOOKING_FLOW":"MODEL");
                         var names=answer.toolExecutions()==null?List.<String>of():answer.toolExecutions().stream().map(t->t.request().name()).toList();
                         var drafts=db.mongo.getCollection("demo_appointment_drafts").find(new org.bson.Document("conversationId",cp.conversationId())).into(new ArrayList<>());
                         var failures=new ArrayList<>(grade(turn,names,drafts,db.active(),answer.content()));

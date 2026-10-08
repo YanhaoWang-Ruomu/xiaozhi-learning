@@ -85,11 +85,12 @@ public class AiConfig {
             QwenStreamingChatModel streamingModel,
             MongoChatMemoryStore memoryStore,
             AppointmentTools appointmentTools,
-            KnowledgeRetrievalAugmentor knowledgeRetrievalAugmentor) {
+            KnowledgeRetrievalAugmentor knowledgeRetrievalAugmentor,
+            com.ruomu.xiaozhi.service.AppointmentQueryContext queryContext) {
 
         return AiServices.builder(ChatAssistant.class)
-                .chatLanguageModel(com.ruomu.xiaozhi.service.StagedAppointmentModels.sync(com.ruomu.xiaozhi.observability.ObservedModels.sync(model)))
-                .streamingChatLanguageModel(com.ruomu.xiaozhi.service.StagedAppointmentModels.streaming(com.ruomu.xiaozhi.observability.ObservedModels.streaming(streamingModel)))
+                .chatLanguageModel(com.ruomu.xiaozhi.service.VerifiedBookingModels.sync(com.ruomu.xiaozhi.service.StagedAppointmentModels.sync(com.ruomu.xiaozhi.observability.ObservedModels.sync(model)),queryContext))
+                .streamingChatLanguageModel(com.ruomu.xiaozhi.service.VerifiedBookingModels.streaming(com.ruomu.xiaozhi.service.StagedAppointmentModels.streaming(com.ruomu.xiaozhi.observability.ObservedModels.streaming(streamingModel)),queryContext))
                 .chatMemoryProvider(conversationId ->
                         new com.ruomu.xiaozhi.context.BudgetChatMemory(conversationId, memoryStore, 64000)
                 )

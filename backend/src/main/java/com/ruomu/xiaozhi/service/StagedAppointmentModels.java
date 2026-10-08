@@ -76,6 +76,8 @@ public final class StagedAppointmentModels {
                 if(ai.text()!=null && !ai.text().isBlank()) messages.add(AiMessage.from(ai.text()));
                 continue;
             }
+            if(message instanceof UserMessage u && u.name()!=null && u.name().startsWith("booking_"))
+                message=UserMessage.from(u.contents());
             messages.add(message);
         }
         if(!system) messages.add(0,SystemMessage.from(instruction));

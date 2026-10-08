@@ -1,0 +1,6 @@
+{
+  "baseCommit": "074f812cf000a9f5aff912c5bedcc7f2317f1a7b",
+  "branch": "integration/verified-booking-route",
+  "sourceState": "Initial worktree before added negated-history and reversed-range protections; no exact full source snapshot retained. See final runs for release acceptance.",
+  "fullBackendTests": 221
+}

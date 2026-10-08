@@ -395,7 +395,7 @@ class AppointmentMySqlIntegrationTest {
             var queryContext=new AppointmentQueryContext();
             var rag=new KnowledgeRetrievalAugmentor(search);rag.setQueryContext(queryContext);rag.setHybrid(new HybridKnowledgeService(docs,search,model,"hybrid"));rag.setVerified(new VerifiedAppointmentContext(owned,history));
             var tools=new com.ruomu.xiaozhi.tool.AppointmentTools(new AppointmentRuleService(),owned,new AppointmentScheduleService(fixture.jdbc),new AppointmentSessionService(fixture.source),queryContext);
-            var assistant=dev.langchain4j.service.AiServices.builder(ChatAssistant.class).chatLanguageModel(StagedAppointmentModels.sync(com.ruomu.xiaozhi.observability.ObservedModels.sync(model)))
+            var assistant=dev.langchain4j.service.AiServices.builder(ChatAssistant.class).chatLanguageModel(VerifiedBookingModels.sync(StagedAppointmentModels.sync(com.ruomu.xiaozhi.observability.ObservedModels.sync(model)),queryContext))
                 .chatMemoryProvider(id->new com.ruomu.xiaozhi.context.BudgetChatMemory(id,new com.ruomu.xiaozhi.store.MongoChatMemoryStore(fixture.mongo),64000))
                 .tools(tools).retrievalAugmentor(rag).build();
             String date=cp.requirements().get("visitDate").toString();

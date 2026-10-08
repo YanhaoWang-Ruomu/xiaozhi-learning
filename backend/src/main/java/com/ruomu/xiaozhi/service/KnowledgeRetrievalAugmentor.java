@@ -48,7 +48,7 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
         }
 
         if (queryContext != null && request.metadata() != null && request.metadata().chatMemoryId() != null) {
-            queryContext.begin(request.metadata().chatMemoryId().toString());
+            queryContext.begin(request.metadata().chatMemoryId().toString(),userMessage.singleText());
         }
         String originalText = userMessage.singleText();
         String query = com.ruomu.xiaozhi.context.FollowUpQuery.rewrite(originalText.strip(),
@@ -130,7 +130,9 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
         );
 
         return AugmentationResult.builder()
-                .chatMessage(UserMessage.from(context.toString()))
+                .chatMessage(queryContext != null && request.metadata() != null && request.metadata().chatMemoryId() != null
+                        ? UserMessage.from(queryContext.turn(request.metadata().chatMemoryId().toString()),context.toString())
+                        : UserMessage.from(context.toString()))
                 .contents(contents)
                 .build();
     }

@@ -1,0 +1,14 @@
+{
+  "mode" : "MIXED_SERVER_BOOKING_FLOW_QWEN_CONTROLLED_RETRIEVAL_REAL_MYSQL_MONGO",
+  "datasetSha256" : "02312cb2e2ede0db9fe7736797ae6547a0d4d1adc8dc96f2d47c17049ca37533",
+  "at" : "2026-10-08T05:37:56.338791200Z",
+  "model" : "qwen-plus",
+  "plannedTrials" : 6,
+  "selectedScenarios" : [ "change-slot", "missing-selection", "conflicting-date", "capacity-changed", "retrieval-injection", "tool-failure" ],
+  "repetitions" : 1,
+  "plannedTurns" : 11,
+  "answerReview" : "PENDING_MANUAL_REVIEW",
+  "transport" : "SYNC",
+  "answerChecksVersion" : "known-regressions-v2",
+  "limits" : "Controlled retrieval; no Pinecone quality score. Tool failure is injected. One trial cannot measure stability. No clinical accuracy claim."
+}
