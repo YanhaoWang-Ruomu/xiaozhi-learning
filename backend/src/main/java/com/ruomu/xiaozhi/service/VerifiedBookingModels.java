@@ -24,7 +24,10 @@ public final class VerifiedBookingModels {
         var input=context.byMessageName(user.name());
         if(input==null) return user.name()!=null&&user.name().startsWith("booking_")
                 ? answer("本轮会话校验已过期，请重新发送需求。") : null;
-        if(!input.handled())return null;
+        if(!input.handled()) {
+            String evidenceReply=context.evidenceReplyFor(user.name());
+            return evidenceReply==null?null:answer(evidenceReply);
+        }
         if(input.control())return answer(input.text().contains("取消")
                 ?"聊天不能执行取消。请在网页核对对应草稿或预约，点击相应取消按钮并确认。"
                 :"聊天中的确认不能完成预约或扣号，请在网页核对草稿后点击“确认创建演示预约”。");

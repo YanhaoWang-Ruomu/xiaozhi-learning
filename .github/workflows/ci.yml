@@ -68,7 +68,7 @@ jobs:
                     ('service.AgentMultiTurnContractTest', 8), ('service.AgentMultiTurnGraderTest', 8),
                     ('service.AppointmentToolFailureTest', 14), ('service.AppointmentQueryContextTest', 7),
                     ('service.StagedAppointmentModelsTest', 19), ('service.AgentAnswerChecksTest', 12),
-                    ('service.AgentEvalResponseTest', 6), ('service.VerifiedBookingModelsTest', 27)]
+                    ('service.AgentEvalResponseTest', 6), ('service.VerifiedBookingModelsTest', 27), ('service.CorrectiveKnowledgeServiceTest', 22)]
           for suite, minimum in suites:
               report = ET.parse(f'backend/target/surefire-reports/TEST-com.ruomu.xiaozhi.{suite}.xml').getroot()
               assert int(report.attrib['tests']) >= minimum, f'{suite}: tests missing'
@@ -165,7 +165,7 @@ jobs:
         working-directory: .
         shell: pwsh
         run: |
-          foreach ($file in @('scripts/build-release.ps1', 'deploy/start.ps1', 'scripts/test-backup-restore.ps1', 'scripts/test-ai-retrieval.ps1', 'scripts/test-mysql.ps1')) {
+          foreach ($file in @('scripts/build-release.ps1', 'deploy/start.ps1', 'scripts/test-backup-restore.ps1', 'scripts/test-ai-retrieval.ps1', 'scripts/test-mysql.ps1', 'scripts/test-corrective-rag.ps1')) {
             $tokens = $null
             $parseErrors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $file), [ref]$tokens, [ref]$parseErrors) | Out-Null

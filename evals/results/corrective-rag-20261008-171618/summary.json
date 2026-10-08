@@ -1,0 +1,18 @@
+{
+  "datasetSha256" : "e0e8eae18a67dde3cd58ed6cedcf9db123187681943687cdde7a4413fa1784b7",
+  "at" : "2026-10-08T06:18:06.411797700Z",
+  "mode" : "LIVE_QWEN_CHECKER_REAL_PINECONE_HYBRID_FROZEN_RETRIEVAL_LAYER_AB",
+  "planned" : 24,
+  "recorded" : 24,
+  "positiveCount" : 20,
+  "negativeCount" : 4,
+  "baselineEvidenceRecall" : 0.975,
+  "baselineFalseAccepts" : 0,
+  "correctiveEvidenceRecall" : 0.925,
+  "correctiveFalseAccepts" : 0,
+  "correctedQueries" : 0,
+  "failedQueries" : 1,
+  "meanDurationMs" : 4428.75,
+  "review" : "PENDING_MANUAL_REVIEW",
+  "limits" : "Forces corrective retrieval on all fixed cases, including queries chat routing can bypass. First-pass candidates shared for paired comparison. Recall uses original corpus text for selected evidence identity, not exact short-quote equality. Not final answer quality, clinical accuracy, or held-out stability."
+}

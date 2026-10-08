@@ -24,6 +24,9 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
 
     private final KnowledgeSearchService searchService;
     private HybridKnowledgeService hybrid;
+    private CorrectiveKnowledgeService corrective;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setCorrective(CorrectiveKnowledgeService corrective) { this.corrective = corrective; }
     private VerifiedAppointmentContext verified;
     private AppointmentQueryContext queryContext;
     @org.springframework.beans.factory.annotation.Autowired
@@ -50,6 +53,11 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
         if (queryContext != null && request.metadata() != null && request.metadata().chatMemoryId() != null) {
             queryContext.begin(request.metadata().chatMemoryId().toString(),userMessage.singleText());
         }
+        String conversation = request.metadata()==null||request.metadata().chatMemoryId()==null
+                ? null : request.metadata().chatMemoryId().toString();
+        String turn = queryContext==null||conversation==null ? null : queryContext.turn(conversation);
+        boolean booking = queryContext!=null&&conversation!=null&&queryContext.input(conversation)!=null
+                &&queryContext.input(conversation).handled();
         String originalText = userMessage.singleText();
         String query = com.ruomu.xiaozhi.context.FollowUpQuery.rewrite(originalText.strip(),
             request.metadata() == null ? null : request.metadata().chatMemory());
@@ -61,9 +69,18 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
             status = "SKIPPED";
         } else {
             try {
-                var selected = hybrid == null ? searchService.search(query).matches().stream()
-                        .filter(match -> match.score() >= CHAT_MIN_SCORE).limit(CHAT_MAX_RESULTS).toList()
-                        : hybrid.search(query).accepted();
+                List<com.ruomu.xiaozhi.dto.KnowledgeSearchResponse.Match> selected;
+                if(corrective!=null&&!booking&&corrective.applies(query)) {
+                    var result=corrective.search(query);
+                    selected=result.accepted();status=result.status();
+                    if(queryContext!=null&&conversation!=null)
+                        queryContext.evidenceReply(conversation,turn,result.fallbackReply());
+                } else {
+                    selected=hybrid==null ? searchService.search(query).matches().stream()
+                            .filter(match -> match.score() >= CHAT_MIN_SCORE).limit(CHAT_MAX_RESULTS).toList()
+                            : hybrid.search(query).accepted();
+                    status=selected.isEmpty()?"NO_MATCH":"FOUND";
+                }
                 contents = selected.stream()
                         .map(match -> Content.from(TextSegment.from(
                                 match.text(),
@@ -74,7 +91,7 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
                         )))
                         .toList();
 
-                status = contents.isEmpty() ? "NO_MATCH" : "FOUND";
+
             } catch (RuntimeException e) {
                 status = "FAILED";
 
@@ -97,7 +114,8 @@ public class KnowledgeRetrievalAugmentor implements RetrievalAugmentor {
                 .append("【本轮知识检索参考数据】\n")
                 .append("检索状态：").append(status).append('\n')
                 .append("资料性质：虚构教学资料，非真实医院官方信息。\n")
-                .append("FOUND 只表示检索到候选片段，仍需检查是否直接支持回答。\n")
+                .append("FOUND 或 CORRECTED 表示有候选依据，不是事实正确的保证。只用能直接支持原问题的内容回答。\n")
+                .append("INSUFFICIENT 表示依据不足，CONFLICT 表示资料冲突；此时先澄清，不编造具体事实。\n")
                 .append("NO_MATCH 表示没有达到当前筛选阈值的片段，不代表整份资料一定没有答案。\n")
                 .append("FAILED 表示检索失败，不能解释为没有资料。\n")
                 .append("SKIPPED 表示消息为空或超过 500 字符，本轮未执行检索。\n");

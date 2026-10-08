@@ -1,0 +1,91 @@
+package com.ruomu.xiaozhi.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ruomu.xiaozhi.config.*;
+import com.ruomu.xiaozhi.dto.KnowledgeSearchResponse.Match;
+import com.ruomu.xiaozhi.eval.RetrievalEval;
+import org.springframework.core.env.StandardEnvironment;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/** Read-only paid A/B on the frozen retrieval-v1 dataset. Forces the retrieval layer, not chat routing. */
+public final class CorrectiveRagEval {
+    private static final ObjectMapper JSON=new ObjectMapper();
+    static String normalized(String s){return s.replaceAll("\\s+","");}
+    static double recall(RetrievalEval.Case c,List<Match> accepted,List<com.ruomu.xiaozhi.dto.KnowledgePreviewResponse.Chunk> corpus) {
+        if(c.evidence().isEmpty())return 0;
+        return c.evidence().stream().filter(e->accepted.stream().anyMatch(m->corpus.stream().anyMatch(chunk->
+                chunk.index()==m.index()&&chunk.source().equals(m.source())&&e.source().equals(chunk.source())
+                &&normalized(chunk.text()).contains(normalized(e.quote()))))).count()/(double)c.evidence().size();
+    }
+    static boolean releaseGate(double before,double after,long falseBefore,long falseAfter,long failures,int planned,int recorded) {
+        return planned>0&&planned==recorded&&failures==0&&Double.isFinite(before)&&Double.isFinite(after)
+                &&after>=before&&falseAfter<=falseBefore;
+    }
+    public static void main(String[] args) throws Exception {
+        if(args.length!=2)throw new IllegalArgumentException("dataset output");
+        Path dataset=Path.of(args[0]),output=Path.of(args[1]);Files.createDirectory(output);
+        var cases=new ArrayList<RetrievalEval.Case>();
+        for(String line:Files.readAllLines(dataset,StandardCharsets.UTF_8))if(!line.isBlank())cases.add(JSON.readValue(line,RetrievalEval.Case.class));
+        var docs=new KnowledgeDocumentService();var corpus=docs.preview().chunks();
+        for(var c:cases)for(var e:c.evidence())if(corpus.stream().noneMatch(chunk->chunk.source().equals(e.source())&&normalized(chunk.text()).contains(normalized(e.quote()))))
+            throw new IllegalArgumentException("Missing gold evidence "+c.id());
+        DashScopeNetworkConfig.dashScopeNetworkPolicy(new StandardEnvironment()).postProcessBeanFactory(null);
+        var model=new AiConfig().qwenChatModel();
+        var dense=new KnowledgeSearchService(docs,new KnowledgeEmbeddingConfig().knowledgeEmbeddingModel(),
+                new PineconeClient(JSON,System.getenv("PINECONE_API_KEY"),System.getenv("PINECONE_INDEX_HOST")));
+        var hybrid=new HybridKnowledgeService(docs,dense,model,"hybrid");
+        var rows=new ArrayList<Map<String,Object>>();int exit=0;
+        for(var c:cases) {
+            var row=new LinkedHashMap<String,Object>();row.put("id",c.id());row.put("query",c.query());row.put("goldEvidence",c.evidence());
+            long start=System.nanoTime();var checks=new ArrayList<String>();var providerFailed=new AtomicBoolean();
+            try {
+                var baseline=hybrid.search(c.query());row.put("baseline",baseline.accepted());
+                var corrective=new CorrectiveKnowledgeService(q->q.equals(c.query())?baseline.accepted():hybrid.search(q).accepted(),p->{
+                    try {String raw=model.chat(p);checks.add(raw);return raw;}
+                    catch(RuntimeException e){providerFailed.set(true);throw e;}
+                });
+                var result=corrective.search(c.query());row.put("corrective",result);row.put("rawJudgments",checks);
+                row.put("productionLexicalScope",corrective.applies(c.query()));
+                row.put("baselineEvidenceRecall",recall(c,baseline.accepted(),corpus));
+                row.put("correctiveEvidenceRecall",recall(c,result.accepted(),corpus));
+                row.put("baselineFalseAcceptance",c.evidence().isEmpty()&&!baseline.accepted().isEmpty());
+                row.put("correctiveFalseAcceptance",c.evidence().isEmpty()&&!result.accepted().isEmpty());
+                row.put("status",result.status());
+                if("FAILED".equals(result.status()))exit=2;
+                row.put("providerFailure",providerFailed.get());
+            } catch(RuntimeException failure) {exit=2;providerFailed.set(true);row.put("status","ERROR");row.put("errorType",failure.getClass().getSimpleName());}
+            row.put("durationMs",(System.nanoTime()-start)/1000000);rows.add(row);
+            Files.writeString(output.resolve("trials.jsonl"),JSON.writeValueAsString(row)+"\n",StandardCharsets.UTF_8,StandardOpenOption.CREATE,StandardOpenOption.APPEND);
+            System.out.println("CORRECTIVE_EVAL id="+c.id()+" status="+row.get("status"));
+            if(providerFailed.get())break;
+        }
+        var positives=rows.stream().filter(r->!((List<?>)r.get("goldEvidence")).isEmpty()).toList();
+        var negatives=rows.stream().filter(r->((List<?>)r.get("goldEvidence")).isEmpty()).toList();
+        var summary=new LinkedHashMap<String,Object>();
+        summary.put("datasetSha256",HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(dataset))));
+        summary.put("at",Instant.now().toString());summary.put("mode","LIVE_QWEN_CHECKER_REAL_PINECONE_HYBRID_FROZEN_RETRIEVAL_LAYER_AB");
+        summary.put("planned",cases.size());summary.put("recorded",rows.size());summary.put("positiveCount",positives.size());summary.put("negativeCount",negatives.size());
+        for(String prefix:List.of("baseline","corrective")) {
+            summary.put(prefix+"EvidenceRecall",positives.stream().mapToDouble(r->((Number)r.getOrDefault(prefix+"EvidenceRecall",0)).doubleValue()).average().orElse(0));
+            summary.put(prefix+"FalseAccepts",negatives.stream().filter(r->Boolean.TRUE.equals(r.get(prefix+"FalseAcceptance"))).count());
+        }
+        summary.put("correctedQueries",rows.stream().filter(r->"CORRECTED".equals(r.get("status"))).count());
+        summary.put("failedQueries",rows.stream().filter(r->Set.of("ERROR","FAILED").contains(r.get("status"))).count());
+        summary.put("meanDurationMs",rows.stream().mapToLong(r->((Number)r.get("durationMs")).longValue()).average().orElse(0));
+        boolean ready=releaseGate(((Number)summary.get("baselineEvidenceRecall")).doubleValue(),
+                ((Number)summary.get("correctiveEvidenceRecall")).doubleValue(),
+                ((Number)summary.get("baselineFalseAccepts")).longValue(),((Number)summary.get("correctiveFalseAccepts")).longValue(),
+                ((Number)summary.get("failedQueries")).longValue(),cases.size(),rows.size());
+        summary.put("releaseGate",ready?"PASS_FIXED_SAMPLE_ONLY":"FAIL_DO_NOT_ENABLE_BY_DEFAULT");
+        if(!ready)exit=2;
+        summary.put("review","PENDING_MANUAL_REVIEW");
+        summary.put("limits","Forces corrective retrieval on all fixed cases, including queries chat routing can bypass. First-pass candidates shared for paired comparison. Recall uses original corpus text for selected evidence identity, not exact short-quote equality. Not final answer quality, clinical accuracy, or held-out stability.");
+        JSON.writerWithDefaultPrettyPrinter().writeValue(output.resolve("summary.json").toFile(),summary);
+        System.out.println("CORRECTIVE_REPORT="+output);System.exit(exit);
+    }
+}

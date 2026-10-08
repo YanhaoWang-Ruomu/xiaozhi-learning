@@ -1,0 +1,12 @@
+{
+  "baseCommit": "b37534e4a5b009a7dfe23028b5430c4d6ec7b537",
+  "sourceSha256": {
+    "backend/src/main/java/com/ruomu/xiaozhi/service/CorrectiveKnowledgeService.java": "4a1daf7ca8300b3ce2365746c6593fc02f90735cf16a2e2e979a9f1013508515",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/KnowledgeRetrievalAugmentor.java": "3d760eb489bea8503dcf9acba7d32f2a851ad42ff292ee4d1e45fdeea6030143",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/AppointmentQueryContext.java": "4df9ae0ab9ba483214aef4975202ae79fa9ab43c1e6ce55fb1333a498ac70a26",
+    "backend/src/main/java/com/ruomu/xiaozhi/service/VerifiedBookingModels.java": "fc68a3eee91249e91fc11b9b2ce20c022e4c33cea1a758d91844940b6355d8e0",
+    "backend/src/test/java/com/ruomu/xiaozhi/service/AgentMultiTurnEval.java": "91f77a83efdc84ec52f75993ea9b05f858395ed6454a3367e4495b14af18e75d"
+  },
+  "fullBackendTests": 245,
+  "correctiveRagEnabledInHarness": true
+}

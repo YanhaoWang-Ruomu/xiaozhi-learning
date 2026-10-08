@@ -394,6 +394,7 @@ class AppointmentMySqlIntegrationTest {
             var search=new KnowledgeSearchService(docs,new com.ruomu.xiaozhi.config.KnowledgeEmbeddingConfig().knowledgeEmbeddingModel(),new PineconeClient(json,System.getenv("PINECONE_API_KEY"),System.getenv("PINECONE_INDEX_HOST")));
             var queryContext=new AppointmentQueryContext();
             var rag=new KnowledgeRetrievalAugmentor(search);rag.setQueryContext(queryContext);rag.setHybrid(new HybridKnowledgeService(docs,search,model,"hybrid"));rag.setVerified(new VerifiedAppointmentContext(owned,history));
+            rag.setCorrective(new CorrectiveKnowledgeService(new HybridKnowledgeService(docs,search,model,"hybrid"),model,true));
             var tools=new com.ruomu.xiaozhi.tool.AppointmentTools(new AppointmentRuleService(),owned,new AppointmentScheduleService(fixture.jdbc),new AppointmentSessionService(fixture.source),queryContext);
             var assistant=dev.langchain4j.service.AiServices.builder(ChatAssistant.class).chatLanguageModel(VerifiedBookingModels.sync(StagedAppointmentModels.sync(com.ruomu.xiaozhi.observability.ObservedModels.sync(model)),queryContext))
                 .chatMemoryProvider(id->new com.ruomu.xiaozhi.context.BudgetChatMemory(id,new com.ruomu.xiaozhi.store.MongoChatMemoryStore(fixture.mongo),64000))

@@ -1,0 +1,7 @@
+{
+  "baseCommit": "b37534e4a5b009a7dfe23028b5430c4d6ec7b537",
+  "variant": "negative-answer-rule-revision",
+  "checkerSha256": "140f052d12e5eb4ad0cbab6fd37540dc3436c2d4fb1f5a832038a7e57d6bf142",
+  "evaluatorSha256": "a5c500e93d6353de3461eb99129a4b7afc0e2e36cc06a34de05810879152cb84",
+  "releaseDifferences": "Release default is false; future evaluator also exits nonzero for quantitative regressions. Archived raw summary and source snapshots retained."
+}

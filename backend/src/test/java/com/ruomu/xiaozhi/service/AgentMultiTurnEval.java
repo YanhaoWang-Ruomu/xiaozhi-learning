@@ -77,6 +77,7 @@ public final class AgentMultiTurnEval {
         summary.put("plannedTrials",selected.size()*repetitions); summary.put("selectedScenarios",selected.stream().map(Scenario::id).toList());
         summary.put("repetitions",repetitions);summary.put("plannedTurns",selected.stream().mapToInt(c->c.turns().size()).sum()*repetitions);
         summary.put("answerReview","PENDING_MANUAL_REVIEW");
+        summary.put("correctiveRagEnabled",true);
         summary.put("transport",transport);summary.put("answerChecksVersion","known-regressions-v2");
         summary.put("limits","Controlled retrieval; no Pinecone quality score. Tool failure is injected. One trial cannot measure stability. No clinical accuracy claim.");
         JSON.writerWithDefaultPrettyPrinter().writeValue(output.resolve("manifest.json").toFile(),summary);
@@ -103,6 +104,7 @@ public final class AgentMultiTurnEval {
                 when(search.search(anyString())).thenAnswer(call->new KnowledgeSearchResponse(call.getArgument(0),"CONTROLLED_EVAL",0,matches.size(),2,0.8,matches));
                 var queryContext=new AppointmentQueryContext();
                 var rag=new KnowledgeRetrievalAugmentor(search);rag.setQueryContext(queryContext);rag.setVerified(new VerifiedAppointmentContext(owned,history));
+                rag.setCorrective(new CorrectiveKnowledgeService(q->search.search(q).matches().stream().filter(m->m.score()>=.80).limit(2).toList(),model::chat));
                 var tools=new AppointmentTools(new AppointmentRuleService(),owned,new AppointmentScheduleService(db.jdbc),sessions,queryContext);
                 var builder=AiServices.builder(ChatAssistant.class).chatLanguageModel(VerifiedBookingModels.sync(StagedAppointmentModels.sync(model),queryContext))
                     .chatMemoryProvider(id->new com.ruomu.xiaozhi.context.BudgetChatMemory(id,new com.ruomu.xiaozhi.store.MongoChatMemoryStore(db.mongo),64000))

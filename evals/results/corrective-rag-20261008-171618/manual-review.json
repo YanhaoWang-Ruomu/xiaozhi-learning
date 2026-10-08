@@ -1,0 +1,18 @@
+{
+  "reviewer": "Codex source-and-evidence review",
+  "status": "FAIL_DO_NOT_ENABLE_BY_DEFAULT",
+  "reviewedAt": "2026-10-08T06:25:02.937Z",
+  "regressedCases": [
+    "R06"
+  ],
+  "insufficientCoverageAccepted": [
+    "R20"
+  ],
+  "releaseDecision": "Keep experimental flag disabled; preserve original hybrid retrieval.",
+  "findings": [
+    "R06 inserted an ellipsis in a claimed literal quote; validator rejected it.",
+    "R20 judgment accepted incomplete support for a two-part question.",
+    "R01 also selected wheelchair-desk evidence beyond the general-desk question."
+  ],
+  "limits": "Frozen 24-case retrieval-layer A/B, not final answer accuracy, production scope routing, or independent held-out evaluation."
+}
