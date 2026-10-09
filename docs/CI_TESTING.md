@@ -105,3 +105,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql.ps1 -Ja
 ### 2026-10-08 真实评测与CI边界更新
 
 AgentAnswerChecksTest新增中文内部场次编号检查，最低数量改为12，完整后端192项通过。真实模型评测已有同步和流式失败报告；它们不被CI自动测试替代，也不因CI绿色而改记成功。详情见AGENT_MULTITURN_EVALS.md“账户恢复后的实测与撤回”。
+
+## 2026-10-09：Python 评测服务与演示产物
+
+当前工作流共8个任务：后端、四个框架示例、前端，以及Linux与Windows的Python任务。Java主项目280项、前端50项、浏览器8项、框架示例5/7/12/9项；Python16项单独统计。Python报告门禁要求至少16项且零失败、错误和跳过，不把提醒信息屏蔽。
+
+Python任务安装固定依赖，检查任务队列、幂等、失败及恢复，再离线重算已有模型记录、运行真实本机HTTP脚本。两个系统各上传测试与指标报告，不调用云模型或业务数据库。前端任务额外录制明确标注受控HTTP范围的演示，视频和清单位于frontend-test-reports/demo。
+
+发布要求同一提交main CI成功，重新构建前端和JAR，核对包内容，并验证可选Python模块及原始记录可独立运行；界面视频作为独立Release附件。源码、原始测量、CI结果和发布包分别复核，记录的云模型结果不由普通CI重新采样。

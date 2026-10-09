@@ -67,6 +67,8 @@ jobs:
           find release/python-eval -type d -name __pycache__ -prune -exec rm -rf {} +
           cp -r evals/portfolio release/evals/
           for report in agent-multiturn-sync-20261008-184748 agent-multiturn-stream-20261008-185308 dedicated-rerank-20261008-183756 evidence-challenge-20261008-185227; do cp -r "evals/results/$report" release/evals/results/; done
+          (cd release/python-eval && python -m pytest -q && python -m xiaozhi_eval.metrics --output ../evals/generated-release && python smoke.py ../../python-eval/test-results/packaged-http)
+          find release/python-eval -type d \\( -name __pycache__ -o -name .pytest_cache \\) -prune -exec rm -rf {} +
           printf '%s\n' "$(git rev-parse HEAD)" > release/COMMIT.txt
           python3 scripts/check-release.py --jar release/xiaozhi.jar --dist xiaozhi-ui/dist --release-dir release
           (cd release && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)

@@ -197,6 +197,8 @@ jobs:
       - run: python -m pip check
       - name: Test task lifecycle, queue, idempotency and report definitions
         run: python -m pytest -q --junitxml=test-results/pytest.xml
+      - name: Require all Python suites to execute without skips
+        run: python -c "import xml.etree.ElementTree as e; r=e.parse('test-results/pytest.xml').getroot(); s=list(r.iter('testsuite')); assert sum(int(x.get('tests',0)) for x in s)>=16; assert all(int(x.get(k,0))==0 for x in s for k in ('failures','errors','skipped'))"
       - name: Recompute recorded project metrics without model or database calls
         run: python -m xiaozhi_eval.metrics --output test-results/metrics
       - name: Check the actual local HTTP API and asynchronous evaluation process

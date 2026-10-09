@@ -33,7 +33,7 @@
 
 当前交付范围为本机单实例运行。检索实验的配置与验收结果见相关文档；公网部署另行推进。
 
-[下载 v0.3.0 发布包](https://github.com/YanhaoWang-Ruomu/xiaozhi-learning/releases/tag/v0.3.0)
+[下载最新发布包](https://github.com/YanhaoWang-Ruomu/xiaozhi-learning/releases/latest)
 
 ## 启动入口
 
