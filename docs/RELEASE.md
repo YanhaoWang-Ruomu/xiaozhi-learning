@@ -11,7 +11,7 @@
 
 ## 从源码打包
 
-需要 Java17、Maven、Node24、npm 及 Git。在项目根目录执行：
+需要 Java17、Maven、Node24、npm、Git及Python3.14。在项目根目录执行：
 
 ~~~powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-release.ps1 -JavaHome "F:\xiaozhi-medical\tools\jdk\jdk-17.0.20.1+1" -MavenCommand "F:\xiaozhi-medical\tools\maven\apache-maven-3.9.11\bin\mvn.cmd" -NpmCommand "F:\Node.js\npm.cmd"
@@ -21,7 +21,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-release.ps1 
 
 成功打印 RELEASE_READY 和 RELEASE_ZIP，默认输出到 F:\xiaozhi-learning-releases，按时间和提交区分目录，不覆盖旧包。本机脚本生成 release.json 和 manifest.json，记录源码提交、工作区是否存在未提交修改及文件校验值。
 
-GitHub标签发布则生成 COMMIT.txt 与 SHA256SUMS；要求相同提交的 main CI 已通过，再构建前端和JAR。发布检查逐字节比较JAR内页面与本次dist，拒绝遗留assets，并确认新增后端类、启动脚本与 config/application.properties。ZIP不包含业务数据库或密钥。独立框架示例及完整评测数据请查看相应源码版本。
+GitHub标签发布则生成 COMMIT.txt 与 SHA256SUMS；要求相同提交的 main CI 已通过，再构建前端和JAR。发布检查逐字节比较JAR内页面与本次dist，拒绝遗留assets，并确认新增后端类、启动脚本与 config/application.properties。ZIP不包含业务数据库或密钥。v0.3.2还收录可选Python服务、意图实验源码/合成数据/报告、相关操作脚本与所需原始评测。独立框架示例及其他历史评测请查看相应源码版本。
+
+本机与GitHub共用stage-release-extras.py，仅复制已跟踪的模块资料，并通过EXTRAS.json逐文件核对来源与字节。GitHub在待发布目录重跑Python16项、真实HTTP及意图18项，训练报告留在evals/ml-intent/release-validation；运行缓存和模型不进入包。
 
 ## 本机启动
 

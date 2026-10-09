@@ -7,7 +7,8 @@
 在新的 PowerShell 中执行：
 
 ~~~powershell
-cd F:\xiaozhi-learning\ml-intent
+# 在源码根目录或发布包解压目录中打开 PowerShell
+cd .\ml-intent
 py -3.14 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m pip check
@@ -45,6 +46,10 @@ Start-Process .\runs\local\report.html
 report.html 是可直接打开的独立报告：效果对照、训练/验证差距、混淆矩阵、逐条误判和回退挑战。CLI展示同一句话的分类提示。CI在Linux、Windows重新训练、测试并保存报告；本机存档的耗时只代表当时环境。
 
 本次模型未胜过关键词基线，尚不接入主项目。当前已经完成一轮机器学习实验；生产泛化、独立人工复核和主系统影子比较仍需后续验收。新增表达或改标注后应发布数据新版本，不能用原测试题反复优化再称其为未见测试。
+
+## 发布包中的运行
+
+v0.3.2将本模块、data/intent-v1.jsonl及evals/ml-intent/20261009报告放在ZIP中；解压后按上面的依赖/训练命令操作。GitHub发布时从这个目录结构重跑18项检查和训练，另将云端报告保存在evals/ml-intent/release-validation。Java启动不会自动运行本模块，原业务数据库不受影响。
 
 ## 原始语句标注原则
 

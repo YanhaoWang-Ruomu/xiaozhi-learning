@@ -1,4 +1,4 @@
-param([string]$JavaHome=$env:JAVA_HOME,[string]$MavenCommand='mvn.cmd',[string]$NpmCommand='npm.cmd',[string]$OutputRoot='')
+param([string]$JavaHome=$env:JAVA_HOME,[string]$MavenCommand='mvn.cmd',[string]$NpmCommand='npm.cmd',[string]$OutputRoot='',[string]$PythonCommand='python.exe')
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent
@@ -7,7 +7,7 @@ if(-not $OutputRoot){$OutputRoot=Join-Path (Split-Path $repo -Parent) 'xiaozhi-l
 $OutputRoot=[IO.Path]::GetFullPath($OutputRoot)
 $repoPrefix=[IO.Path]::GetFullPath($repo).TrimEnd('\')+'\'
 if($OutputRoot.StartsWith($repoPrefix,[StringComparison]::OrdinalIgnoreCase) -or $OutputRoot -eq $repo){throw 'OutputRoot must be outside the source repository'}
-foreach($tool in @($MavenCommand,$NpmCommand,'git')){if(-not (Get-Command $tool -ErrorAction SilentlyContinue)){throw "Missing tool: $tool"}}
+foreach($tool in @($MavenCommand,$NpmCommand,$PythonCommand,'git')){if(-not (Get-Command $tool -ErrorAction SilentlyContinue)){throw "Missing tool: $tool"}}
 $stamp=Get-Date -Format 'yyyyMMdd-HHmmss'
 $commit=(& git -C $repo rev-parse --short HEAD).Trim()
 if($LASTEXITCODE -ne 0){throw 'Cannot read Git revision'}
@@ -40,6 +40,11 @@ try{
  Copy-Item "$repo\docs\RELEASE.md" "$dest\README.md"
  Copy-Item "$repo\docs\BACKUP_RESTORE.md" "$dest\BACKUP_RESTORE.md"
  Copy-Item "$repo\sql\*.sql" "$dest\sql\"
+ & $PythonCommand "$repo\scripts\stage-release-extras.py" --source $repo --release $dest
+ if($LASTEXITCODE -ne 0){throw 'Optional module staging failed'}
+ (& git -C $repo rev-parse HEAD).Trim() | Set-Content "$dest\COMMIT.txt" -Encoding ASCII
+ & $PythonCommand "$repo\scripts\check-release.py" --jar "$dest\xiaozhi.jar" --dist "$repo\xiaozhi-ui\dist" --release-dir $dest
+ if($LASTEXITCODE -ne 0){throw 'Release content verification failed'}
  $meta=[ordered]@{builtAt=(Get-Date).ToUniversalTime().ToString('o');sourceCommit=$commit;workingTreeDirty=$dirty;scope='local single-instance';java='17';databaseIntegrationTests='not run by this script; require scripts/test-mysql.ps1 or successful CI'}
  $meta | ConvertTo-Json | Set-Content "$dest\release.json" -Encoding UTF8
  $hashes=@(Get-ChildItem $dest -Recurse -File | ForEach-Object{

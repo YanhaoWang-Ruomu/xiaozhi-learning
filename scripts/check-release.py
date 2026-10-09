@@ -3,6 +3,8 @@ import argparse
 from pathlib import Path
 import re
 import zipfile
+import subprocess
+import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--jar", required=True, type=Path)
@@ -32,6 +34,9 @@ if args.release_dir:
     for name in ("xiaozhi.jar", "start.ps1", "config/application.properties", "COMMIT.txt"):
         assert (root / name).is_file(), f"Missing startup file: {name}"
     assert re.fullmatch(r"[0-9a-f]{40}", (root / "COMMIT.txt").read_text().strip()), "Invalid source commit"
+    subprocess.run([sys.executable, str(Path(__file__).with_name("stage-release-extras.py")),
+                    "--source", str(Path(__file__).resolve().parent.parent),
+                    "--release", str(root), "--check-only"], check=True)
     config = (root / "config/application.properties").read_text(encoding="utf-8")
     assert "spring.sql.init.mode=never" in config
     assert "xiaozhi.appointment.import-from-mongo=false" in config
