@@ -134,6 +134,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Check browser recovery and confirmation flows (controlled HTTP backend)
         run: npm run test:browser
+      - name: Record labelled UI demonstration against the controlled fixture
+        run: node scripts/record-demo.mjs test-results/demo
       - name: Audit frontend dependencies (runtime and development)
         run: npm audit --json --audit-level=low > test-results/npm-audit.json
       - name: Test read-only MCP protocol and dependency audit
@@ -171,3 +173,38 @@ jobs:
           path: xiaozhi-ui/test-results/
           if-no-files-found: warn
           retention-days: 7
+  python-evaluation:
+    name: Python offline evaluation / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    defaults:
+      run:
+        working-directory: python-eval
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: python-eval/requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pip check
+      - name: Test task lifecycle, queue, idempotency and report definitions
+        run: python -m pytest -q --junitxml=test-results/pytest.xml
+      - name: Recompute recorded project metrics without model or database calls
+        run: python -m xiaozhi_eval.metrics --output test-results/metrics
+      - name: Check the actual local HTTP API and asynchronous evaluation process
+        run: python smoke.py test-results/http
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: python-evaluation-${{ matrix.os }}
+          path: python-eval/test-results/
+          if-no-files-found: error
+          retention-days: 14

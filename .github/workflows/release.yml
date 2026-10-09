@@ -40,15 +40,33 @@ jobs:
           npm run test:ci
           npm audit --audit-level=low
           npm run build
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: Validate optional Python evaluation service and record UI demo
+        run: |
+          cd python-eval
+          python -m pip install -r requirements.txt
+          python -m pip check
+          python -m pytest -q
+          python smoke.py test-results/http
+          cd ../xiaozhi-ui
+          npx playwright install --with-deps chromium
+          node scripts/record-demo.mjs test-results/demo
       - name: Package executable application and operating instructions
         run: |
           mvn -B -ntp -f backend/pom.xml -Prelease-ui -DskipTests clean package
-          mkdir -p release/mcp release/config
+          mkdir -p release/mcp release/config release/python-eval release/evals/results
           cp backend/target/backend-1.0-SNAPSHOT.jar release/xiaozhi.jar
           cp deploy/start.ps1 release/
           cp deploy/application.properties.example release/config/application.properties
           cp -r deploy sql docs release/
           cp mcp/*.mjs mcp/package*.json release/mcp/
+          cp python-eval/README.md python-eval/requirements.txt python-eval/pytest.ini python-eval/smoke.py release/python-eval/
+          cp -r python-eval/xiaozhi_eval python-eval/tests release/python-eval/
+          find release/python-eval -type d -name __pycache__ -prune -exec rm -rf {} +
+          cp -r evals/portfolio release/evals/
+          for report in agent-multiturn-sync-20261008-184748 agent-multiturn-stream-20261008-185308 dedicated-rerank-20261008-183756 evidence-challenge-20261008-185227; do cp -r "evals/results/$report" release/evals/results/; done
           printf '%s\n' "$(git rev-parse HEAD)" > release/COMMIT.txt
           python3 scripts/check-release.py --jar release/xiaozhi.jar --dist xiaozhi-ui/dist --release-dir release
           (cd release && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
@@ -57,4 +75,4 @@ jobs:
       - name: Publish verified assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "xiaozhi-${GITHUB_REF_NAME}.zip" "xiaozhi-${GITHUB_REF_NAME}.zip.sha256" --verify-tag --title "小智 AI 工程演示 $GITHUB_REF_NAME" --notes-file docs/AI_RELEASE_NOTES.md
+        run: gh release create "$GITHUB_REF_NAME" "xiaozhi-${GITHUB_REF_NAME}.zip" "xiaozhi-${GITHUB_REF_NAME}.zip.sha256" "xiaozhi-ui/test-results/demo/xiaozhi-ui-demo.webm" "xiaozhi-ui/test-results/demo/demo.json" --verify-tag --title "小智 AI 工程演示 $GITHUB_REF_NAME" --notes-file docs/AI_RELEASE_NOTES.md

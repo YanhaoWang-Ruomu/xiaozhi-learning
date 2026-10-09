@@ -1,0 +1,371 @@
+{
+  "schemaVersion": 1,
+  "scope": "historical fixed-sample recordings, recomputed offline",
+  "environment": {
+    "python": "3.14.7",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "agents": [
+    {
+      "recording": "agent-multiturn-sync-20261008-184748",
+      "recordedAt": "2026-10-08T07:47:48.861527900Z",
+      "transport": "SYNC",
+      "plannedTurns": 11,
+      "executedTurns": 11,
+      "automatedPassedTrials": 6,
+      "recordedTrials": 6,
+      "reviewVerdict": "PASS_WITHIN_FIXED_CASES",
+      "toolReturns": {
+        "successful": 7,
+        "attempted": 8,
+        "rate": 0.875,
+        "nonInjectedSuccessful": 7,
+        "nonInjectedAttempted": 7,
+        "nonInjectedRate": 1.0,
+        "injectedFailureCount": 1,
+        "definition": "valid tool return status / recorded tool executions; not autonomous tool-selection accuracy",
+        "executions": [
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "change-slot",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "change-slot",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "createAppointmentDraft",
+            "scenario": "change-slot",
+            "status": "PENDING_CONFIRMATION",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "missing-selection",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "conflicting-date",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "capacity-changed",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "capacity-changed",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "tool-failure",
+            "status": "QUERY_FAILED",
+            "successfulReturn": false,
+            "injectedFailure": true
+          }
+        ]
+      },
+      "serverBooking": {
+        "turns": 10,
+        "latency": {
+          "n": 10,
+          "meanMs": 61.4,
+          "p50Ms": 29.5,
+          "p95Ms": 212.49999999999977,
+          "minMs": 18,
+          "maxMs": 307,
+          "definition": "recorded evaluation turn duration; not TTFT or load-test latency"
+        }
+      },
+      "modelKnowledge": {
+        "turns": 1,
+        "latency": {
+          "n": 1,
+          "meanMs": 9289,
+          "p50Ms": 9289.0,
+          "p95Ms": 9289.0,
+          "minMs": 9289,
+          "maxMs": 9289,
+          "definition": "recorded evaluation turn duration; not TTFT or load-test latency"
+        },
+        "tokens": 15023,
+        "definition": "tokens logged on the final chat path; excludes unlogged checker calls"
+      },
+      "allTurnLatency": {
+        "n": 11,
+        "meanMs": 900.2727272727273,
+        "p50Ms": 30.0,
+        "p95Ms": 4798.0,
+        "minMs": 18,
+        "maxMs": 9289,
+        "definition": "recorded evaluation turn duration; not TTFT or load-test latency"
+      },
+      "database": {
+        "maxActiveAppointments": 0,
+        "stateCheckFailures": 0
+      },
+      "limits": "Controlled retrieval; no Pinecone quality score. Tool failure is injected. One trial cannot measure stability. No clinical accuracy claim.",
+      "correctiveRagEnabledInRecording": true
+    },
+    {
+      "recording": "agent-multiturn-stream-20261008-185308",
+      "recordedAt": "2026-10-08T07:53:09.497605Z",
+      "transport": "STREAM",
+      "plannedTurns": 11,
+      "executedTurns": 11,
+      "automatedPassedTrials": 6,
+      "recordedTrials": 6,
+      "reviewVerdict": "PASS_WITHIN_FIXED_CASES",
+      "toolReturns": {
+        "successful": 7,
+        "attempted": 8,
+        "rate": 0.875,
+        "nonInjectedSuccessful": 7,
+        "nonInjectedAttempted": 7,
+        "nonInjectedRate": 1.0,
+        "injectedFailureCount": 1,
+        "definition": "valid tool return status / recorded tool executions; not autonomous tool-selection accuracy",
+        "executions": [
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "change-slot",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "change-slot",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "createAppointmentDraft",
+            "scenario": "change-slot",
+            "status": "PENDING_CONFIRMATION",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "missing-selection",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "conflicting-date",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "capacity-changed",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "capacity-changed",
+            "status": "DEMO_DATA",
+            "successfulReturn": true,
+            "injectedFailure": false
+          },
+          {
+            "name": "queryAppointmentSessions",
+            "scenario": "tool-failure",
+            "status": "QUERY_FAILED",
+            "successfulReturn": false,
+            "injectedFailure": true
+          }
+        ]
+      },
+      "serverBooking": {
+        "turns": 10,
+        "latency": {
+          "n": 10,
+          "meanMs": 63.4,
+          "p50Ms": 30.5,
+          "p95Ms": 222.29999999999973,
+          "minMs": 19,
+          "maxMs": 333,
+          "definition": "recorded evaluation turn duration; not TTFT or load-test latency"
+        }
+      },
+      "modelKnowledge": {
+        "turns": 1,
+        "latency": {
+          "n": 1,
+          "meanMs": 4548,
+          "p50Ms": 4548.0,
+          "p95Ms": 4548.0,
+          "minMs": 4548,
+          "maxMs": 4548,
+          "definition": "recorded evaluation turn duration; not TTFT or load-test latency"
+        },
+        "tokens": 15023,
+        "definition": "tokens logged on the final chat path; excludes unlogged checker calls"
+      },
+      "allTurnLatency": {
+        "n": 11,
+        "meanMs": 471.09090909090907,
+        "p50Ms": 32.0,
+        "p95Ms": 2440.5,
+        "minMs": 19,
+        "maxMs": 4548,
+        "definition": "recorded evaluation turn duration; not TTFT or load-test latency"
+      },
+      "database": {
+        "maxActiveAppointments": 0,
+        "stateCheckFailures": 0
+      },
+      "limits": "Controlled retrieval; no Pinecone quality score. Tool failure is injected. One trial cannot measure stability. No clinical accuracy claim.",
+      "correctiveRagEnabledInRecording": true
+    }
+  ],
+  "retrieval": {
+    "recording": "dedicated-rerank-20261008-183756",
+    "positiveQueries": 20,
+    "negativeQueries": 4,
+    "baselineEvidenceRecall": 0.975,
+    "rerankedEvidenceRecall": 1.0,
+    "baselineFalseAccepts": 0,
+    "rerankedFalseAccepts": 0,
+    "extraRerankLatency": {
+      "n": 24,
+      "meanMs": 1367.3333333333333,
+      "p50Ms": 1164.5,
+      "p95Ms": 1813.3999999999996,
+      "minMs": 1027,
+      "maxMs": 2930,
+      "definition": "recorded evaluation turn duration; not TTFT or load-test latency"
+    },
+    "definition": "mean gold-evidence recall over positive queries; not answer accuracy",
+    "improvedQueryIds": [
+      "R20"
+    ]
+  },
+  "correctiveChallenge": {
+    "recording": "evidence-challenge-20261008-185227",
+    "passed": 11,
+    "total": 12,
+    "failures": [
+      {
+        "caseId": "H11",
+        "expectedStatus": "FOUND",
+        "actualStatus": "INSUFFICIENT",
+        "failureCode": ""
+      }
+    ]
+  },
+  "sourceFiles": [
+    {
+      "path": "evals/results/agent-multiturn-sync-20261008-184748/implementation.json",
+      "sha256": "252e692a0d3819a2f068f08d4b7a805e3506dee4a4b3f10f252283431183fddc"
+    },
+    {
+      "path": "evals/results/agent-multiturn-sync-20261008-184748/manifest.json",
+      "sha256": "2202fcae1d33a25b4be6e9aeef8fbfa95e8bf418b8d10e2efbc6aba40695aa6e"
+    },
+    {
+      "path": "evals/results/agent-multiturn-sync-20261008-184748/manual-review.json",
+      "sha256": "124b0924aed3c76f481a36eac07a74d4f5919b395872977a05e2e02f063a85df"
+    },
+    {
+      "path": "evals/results/agent-multiturn-sync-20261008-184748/summary.json",
+      "sha256": "a1f2c496de8b7219329e85f1477c50a600b79140a8793403136f67f059a581a8"
+    },
+    {
+      "path": "evals/results/agent-multiturn-sync-20261008-184748/trials.jsonl",
+      "sha256": "3d3ed3abe20f78bf1496c7fc38b56c9bf876f1cb8b0041d276196dec1ce99470"
+    },
+    {
+      "path": "evals/results/agent-multiturn-sync-20261008-184748/turns.jsonl",
+      "sha256": "38697b326fd946f6c6077260dbca8cc25d036d6ea27f54b765ab7dbfa4f7b839"
+    },
+    {
+      "path": "evals/results/agent-multiturn-stream-20261008-185308/implementation.json",
+      "sha256": "252e692a0d3819a2f068f08d4b7a805e3506dee4a4b3f10f252283431183fddc"
+    },
+    {
+      "path": "evals/results/agent-multiturn-stream-20261008-185308/manifest.json",
+      "sha256": "41d3b8d71b5e017472e41ac79c505f462939651532f8428ae68dee767b553fbb"
+    },
+    {
+      "path": "evals/results/agent-multiturn-stream-20261008-185308/manual-review.json",
+      "sha256": "124b0924aed3c76f481a36eac07a74d4f5919b395872977a05e2e02f063a85df"
+    },
+    {
+      "path": "evals/results/agent-multiturn-stream-20261008-185308/summary.json",
+      "sha256": "31a55d785348d3057ba0b0b092a08c5b14729ec20c5f89fb6cbba252cbb7934b"
+    },
+    {
+      "path": "evals/results/agent-multiturn-stream-20261008-185308/trials.jsonl",
+      "sha256": "26cbc0e434bccc201ad00126b6cbacb8a8abe081954c865abf2967522019e427"
+    },
+    {
+      "path": "evals/results/agent-multiturn-stream-20261008-185308/turns.jsonl",
+      "sha256": "e618455836e49243c663ef45b8470e3481ef9e8dffa31f997db75dfa60d72890"
+    },
+    {
+      "path": "evals/results/dedicated-rerank-20261008-183756/implementation.json",
+      "sha256": "ff2ab2041bb2f4de097db1d806b2528ddee7c92f2cfcaa8a4a5ccee7082f273a"
+    },
+    {
+      "path": "evals/results/dedicated-rerank-20261008-183756/manual-review.json",
+      "sha256": "4806c309a5cc959b90efad5c9b007e86d7e5fed165e770c9610c857edf7a2474"
+    },
+    {
+      "path": "evals/results/dedicated-rerank-20261008-183756/summary.json",
+      "sha256": "42f75e84ace49337a634be3b274828daa95d4c70b944565d54914d2a852c1f90"
+    },
+    {
+      "path": "evals/results/dedicated-rerank-20261008-183756/trials.jsonl",
+      "sha256": "92ca9d78a9ce98cbd50a6749410874ddf5f632b5dd307fe0f22b2a148999fe16"
+    },
+    {
+      "path": "evals/results/evidence-challenge-20261008-185227/implementation.json",
+      "sha256": "48a6a6717958705d690df5e05fa291e7fb9698e3f2758c7e695c3465f0b7634f"
+    },
+    {
+      "path": "evals/results/evidence-challenge-20261008-185227/manual-review.json",
+      "sha256": "202ff4d31b6172d35c8481f2d53d37f60a304638004651d49f33e6fc75233b42"
+    },
+    {
+      "path": "evals/results/evidence-challenge-20261008-185227/summary.json",
+      "sha256": "a113879d002f73fd035d9d97de49772434ad2aa65ba4318e5d5671f9d290dcc9"
+    },
+    {
+      "path": "evals/results/evidence-challenge-20261008-185227/trials.jsonl",
+      "sha256": "b0cb3bc84dab4edd9c5d22f6a4c07b4c84935f3a798d47d5adb8e5166fd82642"
+    }
+  ],
+  "limits": [
+    "Small fixed samples; no estimated general success rate.",
+    "Server-controlled booking is counted separately from cloud-model turns.",
+    "An injected tool failure is included in all-call return rate and identified separately.",
+    "The recordings are from 2026-10-08, not a new production benchmark."
+  ]
+}

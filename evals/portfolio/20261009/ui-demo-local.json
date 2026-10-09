@@ -1,0 +1,66 @@
+{
+  "scope": "controlled HTTP/SSE UI demonstration, not live AI or business database verification",
+  "recordedAt": "2026-10-09T07:11:46.381Z",
+  "interactionDurationMs": 28376,
+  "timingDefinition": "step timestamps relative to page creation; encoded video duration may differ slightly",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "steps": [
+    {
+      "atMs": 712,
+      "title": "01 登录：独立账号入口"
+    },
+    {
+      "atMs": 3330,
+      "title": "02 导诊工作台：会话、交流与演示排班"
+    },
+    {
+      "atMs": 5691,
+      "title": "03 SSE 接收：发送后避免重复提交"
+    },
+    {
+      "atMs": 9645,
+      "title": "04 来源展开；安全测试文本按文字显示"
+    },
+    {
+      "atMs": 11893,
+      "title": "05 选择时段只生成草稿，尚未创建预约"
+    },
+    {
+      "atMs": 14072,
+      "title": "06 核对草稿后，单独确认创建"
+    },
+    {
+      "atMs": 16338,
+      "title": "07 已确认的演示预约可以取消"
+    },
+    {
+      "atMs": 18460,
+      "title": "08 取消也需要核对与确认"
+    },
+    {
+      "atMs": 20589,
+      "title": "09 取消保留记录；刷新后同步当前状态"
+    },
+    {
+      "atMs": 22891,
+      "title": "10 刷新恢复：聊天仅发送一次、取消仅执行一次"
+    },
+    {
+      "atMs": 25291,
+      "title": "11 工程实验室：独立查看检索结果"
+    }
+  ],
+  "assertions": {
+    "posts": 1,
+    "creates": 1,
+    "confirms": 1,
+    "cancels": 1,
+    "pageErrors": 0
+  },
+  "credentials": "synthetic fixture only",
+  "video": "xiaozhi-ui-demo.webm",
+  "sha256": "59f05e81220aec3c84bab50193078b85edebde1f79f821c7a38a02a1008e3b5f"
+}

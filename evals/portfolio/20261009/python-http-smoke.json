@@ -1,0 +1,22 @@
+{
+  "scope": "real localhost HTTP, one queued offline evaluation; no cloud calls",
+  "submitMs": 38.75099998549558,
+  "healthLatency": {
+    "n": 30,
+    "meanMs": 1.2596466646452125,
+    "p50Ms": 1.1936500086449087,
+    "p95Ms": 1.756075001321733,
+    "minMs": 1.0744000028353184,
+    "maxMs": 1.8159000028390437,
+    "definition": "sequential localhost health HTTP round trips; not model latency or a load test"
+  },
+  "healthSamplesWhileTaskRunning": 26,
+  "taskDurationMs": 286.8722999992315,
+  "idempotencyVerified": true,
+  "successfulTaskCount": 1,
+  "concurrentLoadClaim": false,
+  "serviceSourceSha256": "410ab3be55aec834f771c4eef0079cc42a8c610ace6f7cc8f3d49fac1fb6111b",
+  "requirementsSha256": "4600c7fa69c6cdfbe18c0ebeeb5042d8b60ab43c45f858e4baaf77f327e2488d",
+  "python": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+  "recordedAt": "2026-10-09T18:16:10+1100"
+}
