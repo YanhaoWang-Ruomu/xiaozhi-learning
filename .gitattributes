@@ -11,3 +11,8 @@
 *.cjs text eol=lf
 *.cmd text eol=crlf
 *.bat text eol=crlf
+
+ml-intent/data/*.jsonl text eol=lf
+ml-intent/*.py text eol=lf
+ml-intent/requirements.txt text eol=lf
+evals/ml-intent/**/*.csv text eol=lf

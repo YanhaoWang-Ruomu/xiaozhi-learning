@@ -58,3 +58,7 @@ __pycache__/
 *.webm
 /python-eval/test-results/
 worker.lock
+
+# Optional intent experiment model and local outputs
+/ml-intent/runs/
+*.joblib

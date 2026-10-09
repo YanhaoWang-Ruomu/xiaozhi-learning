@@ -210,3 +210,44 @@ jobs:
           path: python-eval/test-results/
           if-no-files-found: error
           retention-days: 14
+
+  intent-experiment:
+    name: Synthetic intent experiment / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    defaults:
+      run:
+        working-directory: ml-intent
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: ml-intent/requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pip check
+      - name: Check dataset isolation, selection, model reload and advisory boundaries
+        run: python -m pytest -q --junitxml=runs/pytest.xml
+      - name: Reproduce synthetic training and held-out evaluation (no cloud or database)
+        run: python experiment.py --output runs/ci
+      - name: Require complete tests and disclosed experiment scope
+        run: python -c "import json,xml.etree.ElementTree as e; r=e.parse('runs/pytest.xml').getroot(); s=list(r.iter('testsuite')); assert sum(int(x.get('tests',0)) for x in s)>=18; assert all(int(x.get(k,0))==0 for x in s for k in ('failures','errors','skipped')); m=json.load(open('runs/ci/metrics.json',encoding='utf-8')); assert m['dataset']['split_counts']=={'train':120,'validation':30,'test':30}; assert m['scores_calibrated'] is False; assert all(x['advisory']['action_authorized'] is False for x in m['shadow_challenges'])"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: synthetic-intent-${{ matrix.os }}
+          path: |
+            ml-intent/runs/pytest.xml
+            ml-intent/runs/ci/metrics.json
+            ml-intent/runs/ci/test-predictions.csv
+            ml-intent/runs/ci/REPORT.md
+            ml-intent/runs/ci/report.html
+          if-no-files-found: error
+          retention-days: 14
